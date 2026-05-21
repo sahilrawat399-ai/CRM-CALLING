@@ -775,6 +775,8 @@ export default function App() {
                   calls={calls}
                   stats={stats}
                   onNavigateToCalling={() => setActiveTab('dialer')}
+                  connectedSheets={connectedSheets}
+                  onNavigateToSheets={() => setActiveTab('sheets')}
                 />
               )}
 

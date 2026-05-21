@@ -14,7 +14,10 @@ import {
   Percent,
   BadgeCent,
   ListOrdered,
-  Users
+  Users,
+  FileSpreadsheet,
+  Sparkles,
+  Link2
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,9 +41,18 @@ interface DashboardProps {
   calls: CallLog[];
   stats: RealtimeStats;
   onNavigateToCalling: () => void;
+  connectedSheets?: string[];
+  onNavigateToSheets?: () => void;
 }
 
-export default function DashboardView({ orders, calls, stats, onNavigateToCalling }: DashboardProps) {
+export default function DashboardView({
+  orders,
+  calls,
+  stats,
+  onNavigateToCalling,
+  connectedSheets = [],
+  onNavigateToSheets
+}: DashboardProps) {
   // Confirmation rate over different cities
   const cityDistribution = React.useMemo(() => {
     const cities: Record<string, { total: number; confirmed: number }> = {};
@@ -128,6 +140,57 @@ export default function DashboardView({ orders, calls, stats, onNavigateToCallin
         {/* Decorative subtle lines */}
         <div className="absolute right-0 top-0 w-24 h-24 bg-gradient-to-br from-indigo-550/10 to-transparent blur-xl"></div>
       </div>
+
+      {/* Google Sheets Active Channel Indicator Banner */}
+      {connectedSheets.length === 0 ? (
+        <div className="p-4 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs">
+          <div className="flex gap-3">
+            <div className="p-2 bg-amber-550/15 text-amber-500 rounded-lg shrink-0">
+              <FileSpreadsheet size={16} />
+            </div>
+            <div className="space-y-0.5">
+              <span className="font-bold text-amber-600 dark:text-amber-400 block tracking-tight font-sans">
+                Google Sheets Channel Dials Stream Offline
+              </span>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] m-0 leading-relaxed">
+                Updates occur in local sandbox memory mode only. Link a Google Spreadsheet worksheet to stream transaction details to your logistics system in real time.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onNavigateToSheets}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-650 text-white font-bold rounded-lg border-0 transition-all text-xs cursor-pointer shrink-0 shadow-sm"
+          >
+            Connect Live Worksheet
+          </button>
+        </div>
+      ) : (
+        <div className="p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs">
+          <div className="flex gap-3">
+            <div className="p-2 bg-emerald-500/15 text-emerald-500 rounded-lg shrink-0">
+              <FileSpreadsheet size={16} />
+            </div>
+            <div className="space-y-0.5">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 tracking-tight font-sans">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Live Feed Active: Connected with Google Sheets
+              </span>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] m-0 leading-relaxed">
+                Streaming confirmation dials, WhatsApp check status updates and delivery routing details automatically to {connectedSheets.length} active worksheet(s).
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onNavigateToSheets}
+            className="px-3 py-1.5 bg-slate-105 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-all text-xs cursor-pointer shrink-0"
+          >
+            Manage Channels ({connectedSheets.length})
+          </button>
+        </div>
+      )}
 
       {/* Primary Analytics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

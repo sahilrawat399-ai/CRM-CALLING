@@ -371,69 +371,78 @@ app.get('/api/orders/:id', (req, res) => {
 
 // POST load/upload bulk orders (excel or csv parsed on client)
 app.post('/api/orders/upload', (req, res) => {
-  const { orders: uploadedOrders } = req.body;
-  
-  if (!Array.isArray(uploadedOrders)) {
-    return res.status(400).json({ error: 'Invalid payload. Standard list expected under "orders".' });
+  try {
+    const { orders: uploadedOrders } = req.body;
+    
+    if (!Array.isArray(uploadedOrders)) {
+      return res.status(400).json({ error: 'Invalid payload. Standard list expected under "orders".' });
+    }
+
+    const db = loadDB();
+    let duplicatesCount = 0;
+    let addedCount = 0;
+
+    uploadedOrders.forEach((o: any) => {
+      // Validate phone number presence and name
+      if (!o || !o.phoneNumber || !o.customerName) {
+        return;
+      }
+
+      // Clean duplicate phone & product matches to prevent multiple sales listings
+      const cleanedPhone = String(o.phoneNumber).trim();
+      const isDuplicate = db.orders.some(
+        (existing) => {
+          const existingPhone = String(existing?.phoneNumber || '').trim();
+          const existingProd = String(existing?.productName || '').trim().toLowerCase();
+          const currentProd = String(o.productName || '').trim().toLowerCase();
+          return existingPhone.replace(/\s+/g, '') === cleanedPhone.replace(/\s+/g, '') &&
+                 existingProd === currentProd;
+        }
+      );
+
+      if (isDuplicate) {
+        duplicatesCount++;
+      } else {
+        const newOrder: Order = {
+          id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          customerName: String(o.customerName).trim(),
+          phoneNumber: cleanedPhone,
+          productName: String(o.productName || 'E-commerce Product').trim(),
+          codAmount: Number(o.codAmount) || 0,
+          address: String(o.address || '').trim(),
+          city: String(o.city || '').trim(),
+          state: String(o.state || '').trim(),
+          pincode: String(o.pincode || '').trim(),
+          status: (o.status as OrderStatus) || 'Pending',
+          notes: String(o.notes || '').trim(),
+          callAttempts: 0,
+          createdAt: new Date().toISOString(),
+          paymentMode: String(o.paymentMode || 'COD').trim(),
+          retry4HrStatus: String(o.retry4HrStatus || 'Pending').trim(),
+          retryDay2Status: String(o.retryDay2Status || 'Pending').trim(),
+          whatsappStatus: String(o.whatsappStatus || 'Pending').trim(),
+          addressVerified: String(o.addressVerified || 'Pending').trim(),
+        };
+        db.orders.unshift(newOrder);
+        addedCount++;
+      }
+    });
+
+    saveDB(db);
+
+    // Broadcast realtime update to sync across other user nodes
+    broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
+
+    res.json({
+      success: true,
+      added: addedCount,
+      duplicatesSkipped: duplicatesCount,
+      totalCount: db.orders.length,
+    });
+  } catch (error: any) {
+    console.error('Core order upload error:', error);
+    res.status(500).json({ error: 'Failed to process spreadsheet upload due to server error: ' + error.message });
   }
-
-  const db = loadDB();
-  let duplicatesCount = 0;
-  let addedCount = 0;
-
-  uploadedOrders.forEach((o: any) => {
-    // Validate phone number presence and name
-    if (!o.phoneNumber || !o.customerName) {
-      return;
-    }
-
-    // Clean duplicate phone & product matches to prevent multiple sales listings
-    const cleanedPhone = String(o.phoneNumber).trim();
-    const isDuplicate = db.orders.some(
-      (existing) =>
-        existing.phoneNumber.replace(/\s+/g, '') === cleanedPhone.replace(/\s+/g, '') &&
-        existing.productName.toLowerCase() === String(o.productName || '').trim().toLowerCase()
-    );
-
-    if (isDuplicate) {
-      duplicatesCount++;
-    } else {
-      const newOrder: Order = {
-        id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        customerName: String(o.customerName).trim(),
-        phoneNumber: cleanedPhone,
-        productName: String(o.productName || 'E-commerce Product').trim(),
-        codAmount: Number(o.codAmount) || 0,
-        address: String(o.address || '').trim(),
-        city: String(o.city || '').trim(),
-        state: String(o.state || '').trim(),
-        pincode: String(o.pincode || '').trim(),
-        status: (o.status as OrderStatus) || 'Pending',
-        notes: String(o.notes || '').trim(),
-        callAttempts: 0,
-        createdAt: new Date().toISOString(),
-        paymentMode: String(o.paymentMode || 'COD').trim(),
-        retry4HrStatus: String(o.retry4HrStatus || 'Pending').trim(),
-        retryDay2Status: String(o.retryDay2Status || 'Pending').trim(),
-        whatsappStatus: String(o.whatsappStatus || 'Pending').trim(),
-        addressVerified: String(o.addressVerified || 'Pending').trim(),
-      };
-      db.orders.unshift(newOrder);
-      addedCount++;
-    }
-  });
-
-  saveDB(db);
-
-  // Broadcast realtime update to sync across other user nodes
-  broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
-
-  res.json({
-    success: true,
-    added: addedCount,
-    duplicatesSkipped: duplicatesCount,
-    totalCount: db.orders.length,
-  });
 });
 
 // POST to record customer call log and update status
