@@ -38,6 +38,7 @@ import CallingPanel from './components/CallingPanel';
 import OrderRecords from './components/OrderRecords';
 import AdminPanel from './components/AdminPanel';
 import GoogleSheetsSync from './components/GoogleSheetsSync';
+import SupabaseSync from './components/SupabaseSync';
 import { initAuth, signInWithGoogle, logoutGoogle } from './lib/firebaseAuth';
 import { syncOrderToSpreadsheet } from './lib/googleSheets';
 import { Link2 } from 'lucide-react';
@@ -70,7 +71,7 @@ export default function App() {
   });
 
   // Action view state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dialer' | 'orders' | 'upload' | 'admin' | 'sheets'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dialer' | 'orders' | 'upload' | 'admin' | 'sheets' | 'supabase'>('dashboard');
   const [activeOrderIndex, setActiveOrderIndex] = useState<number>(0);
 
   // Connection Stream SSE state representation
