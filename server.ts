@@ -232,6 +232,7 @@ interface DBObj {
   orders: Order[];
   callLogs: CallLog[];
   statusHistory: StatusHistory[];
+  connectedSheets?: string[];
 }
 
 // Ensure database file loaded
@@ -239,7 +240,11 @@ function loadDB(): DBObj {
   try {
     if (fs.existsSync(DB_FILE)) {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!parsed.connectedSheets) {
+        parsed.connectedSheets = [];
+      }
+      return parsed;
     }
   } catch (err) {
     console.error('Error loading database:', err);
@@ -249,7 +254,8 @@ function loadDB(): DBObj {
   const initDb: DBObj = {
     orders: DEFAULT_ORDERS,
     callLogs: DEFAULT_CALLS,
-    statusHistory: DEFAULT_HISTORY
+    statusHistory: DEFAULT_HISTORY,
+    connectedSheets: []
   };
   fs.writeFileSync(DB_FILE, JSON.stringify(initDb, null, 2), 'utf-8');
   return initDb;
@@ -406,6 +412,11 @@ app.post('/api/orders/upload', (req, res) => {
         notes: String(o.notes || '').trim(),
         callAttempts: 0,
         createdAt: new Date().toISOString(),
+        paymentMode: String(o.paymentMode || 'COD').trim(),
+        retry4HrStatus: String(o.retry4HrStatus || 'Pending').trim(),
+        retryDay2Status: String(o.retryDay2Status || 'Pending').trim(),
+        whatsappStatus: String(o.whatsappStatus || 'Pending').trim(),
+        addressVerified: String(o.addressVerified || 'Pending').trim(),
       };
       db.orders.unshift(newOrder);
       addedCount++;
@@ -471,6 +482,30 @@ app.post('/api/orders/:id/call-log', (req, res) => {
   order.status = status as OrderStatus;
   order.callAttempts += 1;
   order.lastCalledAt = new Date().toISOString();
+
+  // Map and trigger automatic retry schedules
+  const missedAttempts = ['No Answer', 'Busy', 'Wrong Number', 'Callback Later'].includes(status);
+  
+  if (missedAttempts) {
+    if (order.callAttempts === 1) {
+      order.retry4HrStatus = 'Scheduled';
+      order.retry4HrTime = new Date(Date.now() + 4 * 3600 * 1000).toISOString(); // 4 hours later
+    } else if (order.callAttempts === 2) {
+      order.retry4HrStatus = 'No Answer';
+      order.retryDay2Status = 'Scheduled';
+      order.retryDay2Time = new Date(Date.now() + 48 * 3600 * 1000).toISOString(); // 2 days later
+    } else if (order.callAttempts >= 3) {
+      order.retryDay2Status = 'No Answer';
+    }
+  } else if (status === 'Confirmed') {
+    order.retry4HrStatus = 'Not Needed';
+    order.retryDay2Status = 'Not Needed';
+    order.whatsappStatus = 'Yes';
+    order.addressVerified = 'Yes';
+  } else if (status === 'Cancelled' || status === 'Fake Order') {
+    order.retry4HrStatus = 'Not Needed';
+    order.retryDay2Status = 'Not Needed';
+  }
 
   db.orders[orderIndex] = order;
   saveDB(db);
@@ -663,6 +698,53 @@ app.post('/api/ai/speech-to-text', async (req, res) => {
   ];
   const randomTranscript = simulatedTranscripts[Math.floor(Math.random() * simulatedTranscripts.length)];
   res.json({ text: randomTranscript });
+});
+
+// POST to update meta fields of an order
+app.post('/api/orders/:id/update-fields', (req, res) => {
+  const { id: orderId } = req.params;
+  const { whatsappStatus, addressVerified, paymentMode, retry4HrStatus, retryDay2Status } = req.body;
+
+  const db = loadDB();
+  const orderIndex = db.orders.findIndex((o) => o.id === orderId);
+
+  if (orderIndex === -1) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  const order = db.orders[orderIndex];
+  if (whatsappStatus !== undefined) order.whatsappStatus = whatsappStatus;
+  if (addressVerified !== undefined) order.addressVerified = addressVerified;
+  if (paymentMode !== undefined) order.paymentMode = paymentMode;
+  if (retry4HrStatus !== undefined) order.retry4HrStatus = retry4HrStatus;
+  if (retryDay2Status !== undefined) order.retryDay2Status = retryDay2Status;
+
+  db.orders[orderIndex] = order;
+  saveDB(db);
+
+  broadcastUpdate('order_updated', { orderId, status: order.status });
+  res.json({ success: true, order });
+});
+
+// GET Settings (including Google Spreadsheet Live IDs)
+app.get('/api/admin/settings', (req, res) => {
+  const db = loadDB();
+  res.json({ connectedSheets: db.connectedSheets || [] });
+});
+
+// POST Settings
+app.post('/api/admin/settings', (req, res) => {
+  const { connectedSheets } = req.body;
+  
+  if (!Array.isArray(connectedSheets)) {
+    return res.status(400).json({ error: 'Invalid config. "connectedSheets" must be an array.' });
+  }
+
+  const db = loadDB();
+  db.connectedSheets = connectedSheets;
+  saveDB(db);
+
+  res.json({ success: true, connectedSheets });
 });
 
 // Admin panel actions: Export / Reset CRM logs
