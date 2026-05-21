@@ -111,7 +111,7 @@ export default function DashboardView({ orders, calls, stats, onNavigateToCallin
       <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="relative z-10 space-y-2">
           <h1 className="text-xl md:text-2xl font-bold font-sans tracking-tight text-white m-0">
-            Fashwox COD Calling Desk
+            Leopard Luxe COD Calling Desk
           </h1>
           <p className="text-slate-400 text-xs max-w-xl leading-relaxed m-0">
             Confirm pending customer Cash-On-Delivery orders, capture automated call logs, and use modern Gemini summaries to clean your delivery pipeline in real-time.

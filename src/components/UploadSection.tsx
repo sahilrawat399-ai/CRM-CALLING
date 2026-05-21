@@ -34,8 +34,8 @@ export default function UploadSection({ onUploadSuccess, isLoading }: UploadSect
       'Notes'
     ];
     const sampleRows = [
-      ['Aarav Sharma', '+91 9876543210', 'Fashwox Elite Leather Jacket', '4299', 'H.No 104, Sector 15', 'Ghaziabad', 'Uttar Pradesh', '201012', 'Call in the afternoon'],
-      ['Diya Patel', '8765432109', 'Fashwox Airflow Trail Sneakers', '2499', 'Flat 4B, Shridhar Apartments', 'Ahmedabad', 'Gujarat', '380015', 'Wants size 8']
+      ['Aarav Sharma', '+91 9876543210', 'Leopard Luxe Premium Leather Jacket', '4299', 'H.No 104, Sector 15', 'Ghaziabad', 'Uttar Pradesh', '201012', 'Call in the afternoon'],
+      ['Diya Patel', '8765432109', 'Leopard Luxe Sport Trail Sneakers', '2499', 'Flat 4B, Shridhar Apartments', 'Ahmedabad', 'Gujarat', '380015', 'Wants size 8']
     ];
     
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -44,7 +44,7 @@ export default function UploadSection({ onUploadSuccess, isLoading }: UploadSect
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "fashwox_order_template.csv");
+    link.setAttribute("download", "leopard_luxe_order_template.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -62,7 +62,7 @@ export default function UploadSection({ onUploadSuccess, isLoading }: UploadSect
     return {
       customerName: findValue(['customername', 'name', 'client', 'username']) || '',
       phoneNumber: String(findValue(['phonenumber', 'phone', 'mobile', 'contact']) || '').trim(),
-      productName: findValue(['productname', 'product', 'item', 'sku']) || 'Fashwox E-comm Item',
+      productName: findValue(['productname', 'product', 'item', 'sku']) || 'Leopard Luxe E-comm Item',
       codAmount: parseFloat(String(findValue(['codamount', 'amount', 'price', 'cod'])) || '0') || 0,
       address: findValue(['address', 'addressline', 'street', 'location']) || '',
       city: findValue(['city', 'town']) || '',

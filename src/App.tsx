@@ -189,6 +189,7 @@ export default function App() {
       agentName: string;
       status: OrderStatus;
       remarks: string;
+      summary?: string;
       duration: number;
     }
   ): Promise<boolean> => {
@@ -232,19 +233,19 @@ export default function App() {
     if (role === 'admin') {
       setCurrentUser({
         id: 'usr_admin',
-        name: 'Fashwox CRM Admin',
-        email: 'admin@fashwox.co',
+        name: 'Leopard Luxe CRM Admin',
+        email: 'admin@leopardluxe.co',
         role: 'admin',
         status: 'online',
         lastActive: new Date().toISOString(),
       });
-      setRemarksSelection('Fashwox CRM Admin');
+      setRemarksSelection('Leopard Luxe CRM Admin');
       triggerToast('Administrator auth access confirmed!', 'success');
     } else {
       setCurrentUser({
         id: 'usr_agent',
         name: 'Alice Agent',
-        email: 'alice@fashwox.co',
+        email: 'alice@leopardluxe.co',
         role: 'agent',
         status: 'online',
         lastActive: new Date().toISOString(),
@@ -329,7 +330,7 @@ export default function App() {
                 ADMIN & AGENT WORKSTATION
               </div>
               <h2 className="text-3xl font-black tracking-tight text-slate-850 dark:text-white m-0">
-                Fashwox CRM
+                Leopard Luxe CRM
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                 Streamline Cash-On-Delivery confirmation calls, track order statuses in real-time, and log outcomes with AI assistance.
@@ -407,11 +408,11 @@ export default function App() {
             
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-indigo-600 text-white rounded-lg shadow-sm font-black text-xs tracking-wider uppercase">
-                FW
+                LL
               </div>
               <div>
                 <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white m-0 font-sans">
-                  Fashwox CRM
+                  Leopard Luxe CRM
                 </h1>
                 <p className="text-[10px] text-slate-405 m-0 leading-normal flex items-center gap-1.5 font-semibold">
                   {currentUser.role === 'admin' ? 'Administrator' : 'Agent Assigned Desk'} • {currentUser.name}

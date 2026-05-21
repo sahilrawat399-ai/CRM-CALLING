@@ -1,6 +1,6 @@
 {
-  "name": "Fashwox CRM",
-  "description": "Fashwox CRM is a modern AI-powered order confirmation CRM for e-commerce order confirmation calling, featuring Excel uploads, live dialer workflows, AI call-remarks summary, and realtime dashboards.",
+  "name": "Leopard Luxe Data Handling CRM Tool",
+  "description": "Leopard Luxe is a modern AI-powered CRM for e-commerce data handling and order confirmation, featuring Excel uploads, live dialer workflows, AI call-remarks summary, and realtime dashboards.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

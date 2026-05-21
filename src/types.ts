@@ -48,6 +48,7 @@ export interface CallLog {
   phoneNumber: string;
   status: OrderStatus;
   remarks: string;
+  summary?: string; // AI generated summary
   duration: number; // in seconds
   callTime: string; // formatted time e.g., "10:30 AM"
   timestamp: string; // ISO string

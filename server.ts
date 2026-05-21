@@ -39,7 +39,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_1',
     customerName: 'Aarav Sharma',
     phoneNumber: '+91 9876543210',
-    productName: 'Fashwox Elite Leather Jacket (Black, L)',
+    productName: 'Leopard Luxe Elite Leather Jacket (Black, L)',
     codAmount: 4299,
     address: 'H.No 104, Sector 15, Vasundhara',
     city: 'Ghaziabad',
@@ -54,7 +54,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_2',
     customerName: 'Diya Patel',
     phoneNumber: '+91 8765432109',
-    productName: 'Fashwox Airflow-2026 Trail Sneakers',
+    productName: 'Leopard Luxe Airflow-2026 Trail Sneakers',
     codAmount: 2499,
     address: 'Flat 4B, Shridhar Apartments, Satellite Rd',
     city: 'Ahmedabad',
@@ -70,7 +70,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_3',
     customerName: 'Rohan Verma',
     phoneNumber: '+91 7654321098',
-    productName: 'Fashwox Classic Cotton Casual Polo',
+    productName: 'Leopard Luxe Classic Cotton Casual Polo',
     codAmount: 1199,
     address: '202, Block C, Grand Residency, Whitefield',
     city: 'Bengaluru',
@@ -86,7 +86,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_4',
     customerName: 'Isha Nair',
     phoneNumber: '+91 9123456789',
-    productName: 'Fashwox Mulberry Silk Fest Saree',
+    productName: 'Leopard Luxe Mulberry Silk Fest Saree',
     codAmount: 5499,
     address: 'Grace Villa, MG Road, Ernakulam',
     city: 'Kochi',
@@ -102,7 +102,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_5',
     customerName: 'Kabir Mehta',
     phoneNumber: '+91 9345678901',
-    productName: 'Fashwox Pro Active Smart Sports Watch',
+    productName: 'Leopard Luxe Pro Active Smart Sports Watch',
     codAmount: 3199,
     address: 'Shop 12, Main Market, Gole Market',
     city: 'New Delhi',
@@ -118,7 +118,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_6',
     customerName: 'Aditya Sen',
     phoneNumber: '+91 9224466880',
-    productName: 'Fashwox Urban Corduroy Trousers (Beige)',
+    productName: 'Leopard Luxe Urban Corduroy Trousers (Beige)',
     codAmount: 1799,
     address: 'Flat 102, Wing-A, Greenfield Society, Wakad',
     city: 'Pune',
@@ -133,7 +133,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_7',
     customerName: 'Sanjana Roy',
     phoneNumber: '+91 9112233445',
-    productName: 'Fashwox Premium polarized Aviator Sunglasses',
+    productName: 'Leopard Luxe Premium polarized Aviator Sunglasses',
     codAmount: 1599,
     address: '15 Main St, Salt Lake Sector V',
     city: 'Kolkata',
@@ -428,7 +428,7 @@ app.post('/api/orders/upload', (req, res) => {
 // POST to record customer call log and update status
 app.post('/api/orders/:id/call-log', (req, res) => {
   const { id: orderId } = req.params;
-  const { agentName, status, remarks, duration, callTime } = req.body;
+  const { agentName, status, remarks, summary, duration, callTime } = req.body;
 
   const db = loadDB();
   const orderIndex = db.orders.findIndex((o) => o.id === orderId);
@@ -448,6 +448,7 @@ app.post('/api/orders/:id/call-log', (req, res) => {
     phoneNumber: order.phoneNumber,
     status: status as OrderStatus,
     remarks: remarks || 'Call completed.',
+    summary: summary || '',
     duration: Number(duration) || 0,
     callTime: callTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     timestamp: new Date().toISOString(),
@@ -489,17 +490,24 @@ app.get('/api/calls', (req, res) => {
 
 // POST AI calls summary / notes suggestions using Gemini API (server-side only)
 app.post('/api/ai/summarize', async (req, res) => {
-  const { customerName, productName, duration, remarks, status } = req.body;
+  const { customerName, productName, duration, remarks, status, transcript } = req.body;
 
   try {
     if (geminiAvailable && aiClient) {
-      const prompt = `You are Fashwox CRM's AI Call Analyst. An agent just called customer "${customerName}" regarding their COD order of "${productName}". 
+      const prompt = `You are Leopard Luxe CRM's AI Call Analyst. An agent just called customer "${customerName}" regarding their COD order of "${productName}". 
       Call details:
       - Call Status: ${status}
       - Call Duration: ${duration} seconds
       - Agent's Rough Remarks: "${remarks}"
+      - Available Call Transcript: "${transcript || 'No direct transcript stream recorded.'}"
 
-      Objective: Write a highly professional, consolidated, one-line summary (maximum 20 words) detailing the outcome, and note any potential action item. Format the response as simple text with no bullet points or conversational introductions.`;
+      Objective: Write a highly professional, action-oriented, and concise summary of the call (maximum 30 words).
+      The summary must capture:
+      1. Order confirmation status (whether confirmed, cancelled, delayed, etc.)
+      2. Customer concerns or details (e.g. requests for size changes, address corrections, preferred delivery slot)
+      3. Specific agreed-upon actions (e.g. dispatch immediately, schedule callback, cancel active item)
+      
+      Format the response as a single, fluid, professional line with no introductions, bullet points, or conversational pleasantries.`;
 
       const geminiResponse = await aiClient.models.generateContent({
         model: 'gemini-3.5-flash',
@@ -518,11 +526,11 @@ app.post('/api/ai/summarize', async (req, res) => {
   let fallbackSummary = '';
   
   if (statusLower.includes('confirm')) {
-    fallbackSummary = `Confirmed COD of ${productName} (${duration}s). Checked coordinates; ready for delivery dispatch.`;
+    fallbackSummary = `Confirmed COD of ${productName} (${duration}s). Customer verified; ready for delivery dispatch ${remarks ? `- Note: ${remarks}` : ''}.`;
   } else if (statusLower.includes('cancel')) {
-    fallbackSummary = `Cancelled COD order of ${productName}. Reason: "${remarks || 'wrong size/unintentional order'}".`;
+    fallbackSummary = `Cancelled COD order of ${productName}. Reason: "${remarks || 'Wrong choice/pincode mismatch'}". Action: Stop dispatch.`;
   } else if (statusLower.includes('callback') || statusLower.includes('later')) {
-    fallbackSummary = `Callback requested in ${duration}s connection. Agent scheduled call retry soon.`;
+    fallbackSummary = `Callback requested in ${duration}s connection. Agent scheduled call retry soon. Remarks: ${remarks || 'Busy'}.`;
   } else {
     fallbackSummary = `Logged call (${duration}s) with status "${status}". Action: ${remarks || 'Review required'}.`;
   }
@@ -530,6 +538,117 @@ app.post('/api/ai/summarize', async (req, res) => {
   res.json({
     summary: fallbackSummary,
     method: 'algorithmic-fallback',
+  });
+});
+
+// POST to evaluate agent remarks quality/accuracy (AI or algorithmic audit)
+app.post('/api/admin/audit-remarks', async (req, res) => {
+  const { calls: auditCalls } = req.body;
+  if (!Array.isArray(auditCalls) || auditCalls.length === 0) {
+    return res.json({ accuracyAverage: 0, evaluations: {} });
+  }
+
+  // Predefined algorithmic rule fallback
+  interface AuditResult {
+    score: number;
+    evaluation: string;
+  }
+  const evaluations: Record<string, AuditResult> = {};
+  let totalScore = 0;
+
+  for (const c of auditCalls) {
+    const text = String(c.remarks || '').trim();
+    const status = String(c.status || '').toLowerCase();
+    let score = 60;
+    let evalMsg = 'Basic notes logged.';
+
+    if (text.length < 10) {
+      score -= 20;
+      evalMsg = 'Too sparse. Lacks action context or helpful remarks.';
+    } else if (text.length > 50) {
+      score += 20;
+      evalMsg = 'Highly detailed and precise calling notes.';
+    } else if (text.length > 25) {
+      score += 10;
+      evalMsg = 'Good descriptive calling summary.';
+    }
+
+    if (status.includes('confirm')) {
+      if (text.toLowerCase().includes('confirm') || text.toLowerCase().includes('dispatch') || text.toLowerCase().includes('yes') || text.toLowerCase().includes('deliver') || text.toLowerCase().includes('size')) {
+        score += 20;
+      } else {
+        score -= 10;
+        evalMsg += ' Status is Confirmed but lacks direct verification details.';
+      }
+    } else if (status.includes('cancel')) {
+      if (text.toLowerCase().includes('cancel') || text.toLowerCase().includes('wrong') || text.toLowerCase().includes('no') || text.toLowerCase().includes('returned') || text.toLowerCase().includes('refused')) {
+        score += 20;
+      } else {
+        score -= 10;
+        evalMsg += ' Status is Cancelled but fails to state customer reasons.';
+      }
+    } else if (status.includes('later') || status.includes('callback') || status.includes('busy')) {
+      if (text.toLowerCase().includes('call') || text.toLowerCase().includes('time') || text.toLowerCase().includes('later') || text.toLowerCase().includes('tomorrow') || text.toLowerCase().includes('busy') || text.toLowerCase().includes('schedule')) {
+        score += 20;
+      } else {
+        score -= 10;
+        evalMsg += ' Rescheduling required but notes lack timestamp details.';
+      }
+    }
+
+    score = Math.max(30, Math.min(100, score));
+    evaluations[c.id] = { score, evaluation: evalMsg };
+    totalScore += score;
+  }
+
+  const algorithmicAverage = Math.round(totalScore / auditCalls.length);
+
+  try {
+    if (geminiAvailable && aiClient) {
+      const callsRep = auditCalls.map((c) => `ID: ${c.id}, Status: ${c.status}, Remarks: "${c.remarks}"`).join('\n');
+      const prompt = `You are Leopard Luxe CRM's AI Call Quality Auditor. Below are customer call records from an e-commerce confirmation center.
+Analyze each agent's remarks against the logged status for completeness, accuracy, and professional rigor, and output a JSON response.
+
+Call Records:
+${callsRep}
+
+Guidelines:
+1. Score each record from 30 to 100 based on detail level:
+   - Does it detail confirmation aspects? (e.g., verifying dispatch, address, specific size modification requested for confirmed statuses).
+   - If cancelled, does it state precise user reservation/concerns?
+   - Is it professional and actionable?
+2. Return a JSON object containing:
+   - "accuracyAverage": number (the overall average score)
+   - "evaluations": an object mapping each call ID to { "score": number, "evaluation": "short 1-sentence evaluation statement" }
+
+Ensure raw, valid JSON only. Keep descriptions professional and short.`;
+
+      const geminiResponse = await aiClient.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const responseText = geminiResponse.text?.trim();
+      if (responseText) {
+        const parsed = JSON.parse(responseText);
+        return res.json({
+          accuracyAverage: parsed.accuracyAverage || algorithmicAverage,
+          evaluations: parsed.evaluations || evaluations,
+          method: 'gemini-api'
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Gemini audit evaluation failed:', error);
+  }
+
+  res.json({
+    accuracyAverage: algorithmicAverage,
+    evaluations,
+    method: 'algorithmic-fallback'
   });
 });
 
@@ -574,7 +693,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Fashwox CRM server bootstrapped running on http://0.0.0.0:${PORT}`);
+    console.log(`Leopard Luxe CRM server bootstrapped running on http://0.0.0.0:${PORT}`);
   });
 }
 
