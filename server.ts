@@ -39,7 +39,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_1',
     customerName: 'Aarav Sharma',
     phoneNumber: '+91 9876543210',
-    productName: 'Leopard Luxe Elite Leather Jacket (Black, L)',
+    productName: 'Fashwox Elite Leather Jacket (Black, L)',
     codAmount: 4299,
     address: 'H.No 104, Sector 15, Vasundhara',
     city: 'Ghaziabad',
@@ -54,7 +54,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_2',
     customerName: 'Diya Patel',
     phoneNumber: '+91 8765432109',
-    productName: 'Leopard Luxe Airflow-2026 Trail Sneakers',
+    productName: 'Fashwox Airflow-2026 Trail Sneakers',
     codAmount: 2499,
     address: 'Flat 4B, Shridhar Apartments, Satellite Rd',
     city: 'Ahmedabad',
@@ -70,7 +70,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_3',
     customerName: 'Rohan Verma',
     phoneNumber: '+91 7654321098',
-    productName: 'Leopard Luxe Classic Cotton Casual Polo',
+    productName: 'Fashwox Classic Cotton Casual Polo',
     codAmount: 1199,
     address: '202, Block C, Grand Residency, Whitefield',
     city: 'Bengaluru',
@@ -86,7 +86,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_4',
     customerName: 'Isha Nair',
     phoneNumber: '+91 9123456789',
-    productName: 'Leopard Luxe Mulberry Silk Fest Saree',
+    productName: 'Fashwox Mulberry Silk Fest Saree',
     codAmount: 5499,
     address: 'Grace Villa, MG Road, Ernakulam',
     city: 'Kochi',
@@ -102,7 +102,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_5',
     customerName: 'Kabir Mehta',
     phoneNumber: '+91 9345678901',
-    productName: 'Leopard Luxe Pro Active Smart Sports Watch',
+    productName: 'Fashwox Pro Active Smart Sports Watch',
     codAmount: 3199,
     address: 'Shop 12, Main Market, Gole Market',
     city: 'New Delhi',
@@ -118,7 +118,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_6',
     customerName: 'Aditya Sen',
     phoneNumber: '+91 9224466880',
-    productName: 'Leopard Luxe Urban Corduroy Trousers (Beige)',
+    productName: 'Fashwox Urban Corduroy Trousers (Beige)',
     codAmount: 1799,
     address: 'Flat 102, Wing-A, Greenfield Society, Wakad',
     city: 'Pune',
@@ -133,7 +133,7 @@ const DEFAULT_ORDERS: Order[] = [
     id: 'ord_7',
     customerName: 'Sanjana Roy',
     phoneNumber: '+91 9112233445',
-    productName: 'Leopard Luxe Premium polarized Aviator Sunglasses',
+    productName: 'Fashwox Premium polarized Aviator Sunglasses',
     codAmount: 1599,
     address: '15 Main St, Salt Lake Sector V',
     city: 'Kolkata',
@@ -494,7 +494,7 @@ app.post('/api/ai/summarize', async (req, res) => {
 
   try {
     if (geminiAvailable && aiClient) {
-      const prompt = `You are Leopard Luxe CRM's AI Call Analyst. An agent just called customer "${customerName}" regarding their COD order of "${productName}". 
+      const prompt = `You are Fashwox CRM's AI Call Analyst. An agent just called customer "${customerName}" regarding their COD order of "${productName}". 
       Call details:
       - Call Status: ${status}
       - Call Duration: ${duration} seconds
@@ -606,7 +606,7 @@ app.post('/api/admin/audit-remarks', async (req, res) => {
   try {
     if (geminiAvailable && aiClient) {
       const callsRep = auditCalls.map((c) => `ID: ${c.id}, Status: ${c.status}, Remarks: "${c.remarks}"`).join('\n');
-      const prompt = `You are Leopard Luxe CRM's AI Call Quality Auditor. Below are customer call records from an e-commerce confirmation center.
+      const prompt = `You are Fashwox CRM's AI Call Quality Auditor. Below are customer call records from an e-commerce confirmation center.
 Analyze each agent's remarks against the logged status for completeness, accuracy, and professional rigor, and output a JSON response.
 
 Call Records:
@@ -693,7 +693,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Leopard Luxe CRM server bootstrapped running on http://0.0.0.0:${PORT}`);
+    console.log(`Fashwox CRM server bootstrapped running on http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -68,7 +68,6 @@ export default function CallingPanel({
   // Active call states
   const [isCalling, setIsCalling] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
-  const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [showRemarksPopup, setShowRemarksPopup] = useState(false);
   const [chosenStatus, setChosenStatus] = useState<OrderStatus>('Confirmed');
 
@@ -102,17 +101,17 @@ export default function CallingPanel({
 
     if (String(statusChoice).toLowerCase().includes('confirm')) {
       return [
-        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, I am calling from Leopard Luxe Customer Desk regarding your Cash on Delivery order for ${item}.` },
+        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, I am calling from Fashwox Customer Desk regarding your Cash on Delivery order for ${item}.` },
         { time: 5, sender: 'customer' as const, text: `Yes! Hello. I placed that order yesterday.` },
         { time: 10, sender: 'agent' as const, text: `Great! The total cash due is ₹${amount}. I want to verify your delivery coordinates: ${order.address}, ${city} (Pincode: ${order.pincode}). Is it correct?` },
         { time: 15, sender: 'customer' as const, text: `Yes, that address is correct. Can you make sure to deliver it before Saturday afternoon as I have travel plans next week?` },
         { time: 20, sender: 'agent' as const, text: `Absolutely. I've noted down Saturday pre-noon slot in our courier instructions. We are preparing to dispatch immediately.` },
         { time: 25, sender: 'customer' as const, text: `Perfect! Thank you so much for the confirmation call.` },
-        { time: 30, sender: 'agent' as const, text: `Our pleasure. Thank you for shopping with Leopard Luxe. Goodbye!` }
+        { time: 30, sender: 'agent' as const, text: `Our pleasure. Thank you for shopping with Fashwox. Goodbye!` }
       ];
     } else if (String(statusChoice).toLowerCase().includes('cancel')) {
       return [
-        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, calling from Leopard Luxe to verify your active purchase of ${item}.` },
+        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, calling from Fashwox to verify your active purchase of ${item}.` },
         { time: 5, sender: 'customer' as const, text: `Oh, hello. Actually, I was looking to cancel that order.` },
         { time: 10, sender: 'agent' as const, text: `Oh, I understand. May I ask the reason for cancellation so we can improve size/color listings?` },
         { time: 15, sender: 'customer' as const, text: `Yes, I realized I selected the wrong sizing and color option. I want to cancel and compile a new order instead.` },
@@ -121,7 +120,7 @@ export default function CallingPanel({
       ];
     } else {
       return [
-        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, this is Leopard Luxe customer dispatch confirming your COD shipment of ${item}.` },
+        { time: 2, sender: 'agent' as const, text: `Hello Mr./Ms. ${name}, this is Fashwox customer dispatch confirming your COD shipment of ${item}.` },
         { time: 5, sender: 'customer' as const, text: `Hi! I am super busy right now. Can you call me back tomorrow morning?` },
         { time: 10, sender: 'agent' as const, text: `Of course, I understand! I am scheduling a callback for tomorrow morning.` },
         { time: 15, sender: 'customer' as const, text: `Perfect. Appreciate your understanding. Thank you.` }
@@ -131,7 +130,10 @@ export default function CallingPanel({
 
   // Stopwatch counter + dialogue stream controller trigger
   useEffect(() => {
-    if (isCalling && !isTimerPaused && activeOrder) {
+    if (isCalling && activeOrder) {
+      setTranscriptLines([]);
+      setCallDuration(0);
+      
       const scenario = getTranscriptForDialScenario(activeOrder, chosenStatus);
       
       const interval = setInterval(() => {
@@ -150,7 +152,7 @@ export default function CallingPanel({
       
       return () => clearInterval(interval);
     }
-  }, [isCalling, isTimerPaused, activeOrder, chosenStatus]);
+  }, [isCalling, activeOrder, chosenStatus]);
 
   // Adjust Index when active list updates
   useEffect(() => {
@@ -170,9 +172,6 @@ export default function CallingPanel({
     if (!activeOrder) return;
     setChosenStatus(statusObjective);
     setRemarksStatus(statusObjective);
-    setCallDuration(0);
-    setTranscriptLines([]);
-    setIsTimerPaused(false);
     setIsCalling(true);
     
     // Fallback tel protocol hook
@@ -310,7 +309,7 @@ export default function CallingPanel({
   const openWhatsAppConfirmation = () => {
     if (!activeOrder) return;
     const cleanPhone = activeOrder.phoneNumber.replace(/[^0-9]/g, '');
-    const msg = `Hello ${activeOrder.customerName}, your Leopard Luxe COD order for "${activeOrder.productName}" of ₹${activeOrder.codAmount} is confirmed successfully and dispatching shortly. Thank you!`;
+    const msg = `Hello ${activeOrder.customerName}, your Fashwox COD order for "${activeOrder.productName}" of ₹${activeOrder.codAmount} is confirmed successfully and dispatching shortly. Thank you!`;
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
   };
@@ -430,20 +429,6 @@ export default function CallingPanel({
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
                       Queue #{activeOrderIndex + 1}
                     </span>
-                    {isCalling && (
-                      <button
-                        onClick={() => setIsTimerPaused(!isTimerPaused)}
-                        title={isTimerPaused ? "Resume Call Timer" : "Pause Call Timer"}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-                          isTimerPaused
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border-amber-500/20'
-                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-450 border-emerald-500/20'
-                        }`}
-                      >
-                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${isTimerPaused ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
-                        <span>{isTimerPaused ? 'PAUSED' : 'LIVE'}: {formatTime(callDuration)}</span>
-                      </button>
-                    )}
                   </div>
                   <p className="text-xs text-slate-500 m-0 pt-0.5">
                     Order confirmation desk ID: {activeOrder.id}
@@ -480,28 +465,16 @@ export default function CallingPanel({
                       <h4 className="text-xs font-bold text-slate-800 dark:text-white m-0 tracking-wider">
                         DIRECT CALL SESSION RUNNING
                       </h4>
-                      <p className="text-[10px] text-slate-405 m-0">
+                      <p className="text-[10px] text-slate-400 m-0">
                         Dialing customer at {activeOrder.phoneNumber}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setIsTimerPaused(!isTimerPaused)}
-                        className={`p-1 px-2.5 text-[10px] font-mono font-bold rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                          isTimerPaused
-                            ? 'bg-amber-50 border-amber-305 text-amber-700 hover:bg-amber-100 dark:bg-amber-955/40 dark:border-amber-800 dark:text-amber-300'
-                            : 'bg-indigo-50 border-indigo-305 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-955/40 dark:border-indigo-805 dark:text-indigo-305'
-                        }`}
-                        title={isTimerPaused ? "Resume Call Stopwatch" : "Pause Call Stopwatch"}
-                      >
-                        {isTimerPaused ? '▶ Resume' : '⏸ Pause'}
-                      </button>
-                      <div className="text-center font-mono font-bold text-indigo-600 dark:text-indigo-405 min-w-[50px]">
-                        {formatTime(callDuration)}
-                      </div>
+                    <div className="text-center font-mono font-bold text-indigo-600 dark:text-indigo-405">
+                      <Clock size={13} className="inline mr-1 text-indigo-400 animate-spin" />
+                      {formatTime(callDuration)}
                     </div>
                     <div className="flex gap-1.5">
                       <button
@@ -654,7 +627,7 @@ export default function CallingPanel({
                     className="flex-1 py-3 px-4 font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
                   >
                     <Phone size={15} />
-                    Call Now
+                    Place Confirmation Call
                   </button>
 
                   <div className="flex gap-1.5 w-full sm:w-auto">
