@@ -68,6 +68,7 @@ export default function CallingPanel({
   // Active call states
   const [isCalling, setIsCalling] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [showRemarksPopup, setShowRemarksPopup] = useState(false);
   const [chosenStatus, setChosenStatus] = useState<OrderStatus>('Confirmed');
 
@@ -130,10 +131,7 @@ export default function CallingPanel({
 
   // Stopwatch counter + dialogue stream controller trigger
   useEffect(() => {
-    if (isCalling && activeOrder) {
-      setTranscriptLines([]);
-      setCallDuration(0);
-      
+    if (isCalling && !isTimerPaused && activeOrder) {
       const scenario = getTranscriptForDialScenario(activeOrder, chosenStatus);
       
       const interval = setInterval(() => {
@@ -152,7 +150,7 @@ export default function CallingPanel({
       
       return () => clearInterval(interval);
     }
-  }, [isCalling, activeOrder, chosenStatus]);
+  }, [isCalling, isTimerPaused, activeOrder, chosenStatus]);
 
   // Adjust Index when active list updates
   useEffect(() => {
@@ -172,6 +170,9 @@ export default function CallingPanel({
     if (!activeOrder) return;
     setChosenStatus(statusObjective);
     setRemarksStatus(statusObjective);
+    setCallDuration(0);
+    setTranscriptLines([]);
+    setIsTimerPaused(false);
     setIsCalling(true);
     
     // Fallback tel protocol hook
@@ -429,6 +430,20 @@ export default function CallingPanel({
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400">
                       Queue #{activeOrderIndex + 1}
                     </span>
+                    {isCalling && (
+                      <button
+                        onClick={() => setIsTimerPaused(!isTimerPaused)}
+                        title={isTimerPaused ? "Resume Call Timer" : "Pause Call Timer"}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                          isTimerPaused
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 border-amber-500/20'
+                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-450 border-emerald-500/20'
+                        }`}
+                      >
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${isTimerPaused ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+                        <span>{isTimerPaused ? 'PAUSED' : 'LIVE'}: {formatTime(callDuration)}</span>
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 m-0 pt-0.5">
                     Order confirmation desk ID: {activeOrder.id}
@@ -465,16 +480,28 @@ export default function CallingPanel({
                       <h4 className="text-xs font-bold text-slate-800 dark:text-white m-0 tracking-wider">
                         DIRECT CALL SESSION RUNNING
                       </h4>
-                      <p className="text-[10px] text-slate-400 m-0">
+                      <p className="text-[10px] text-slate-405 m-0">
                         Dialing customer at {activeOrder.phoneNumber}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4 shrink-0">
-                    <div className="text-center font-mono font-bold text-indigo-600 dark:text-indigo-405">
-                      <Clock size={13} className="inline mr-1 text-indigo-400 animate-spin" />
-                      {formatTime(callDuration)}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsTimerPaused(!isTimerPaused)}
+                        className={`p-1 px-2.5 text-[10px] font-mono font-bold rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                          isTimerPaused
+                            ? 'bg-amber-50 border-amber-305 text-amber-700 hover:bg-amber-100 dark:bg-amber-955/40 dark:border-amber-800 dark:text-amber-300'
+                            : 'bg-indigo-50 border-indigo-305 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-955/40 dark:border-indigo-805 dark:text-indigo-305'
+                        }`}
+                        title={isTimerPaused ? "Resume Call Stopwatch" : "Pause Call Stopwatch"}
+                      >
+                        {isTimerPaused ? '▶ Resume' : '⏸ Pause'}
+                      </button>
+                      <div className="text-center font-mono font-bold text-indigo-600 dark:text-indigo-405 min-w-[50px]">
+                        {formatTime(callDuration)}
+                      </div>
                     </div>
                     <div className="flex gap-1.5">
                       <button
@@ -627,7 +654,7 @@ export default function CallingPanel({
                     className="flex-1 py-3 px-4 font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
                   >
                     <Phone size={15} />
-                    Place Confirmation Call
+                    Call Now
                   </button>
 
                   <div className="flex gap-1.5 w-full sm:w-auto">

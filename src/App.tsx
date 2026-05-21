@@ -24,7 +24,11 @@ import {
   Terminal,
   Activity,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Eye,
+  EyeOff,
+  LogIn
 } from 'lucide-react';
 
 import { Order, CallLog, RealtimeStats, OrderStatus, User as AppUser } from './types';
@@ -43,6 +47,9 @@ export default function App() {
   const [loginMail, setLoginMail] = useState('');
   const [loginRole, setLoginRole] = useState<'admin' | 'agent'>('agent');
   const [loginName, setLoginName] = useState('');
+  const [inputId, setInputId] = useState('');
+  const [inputPassword, setInputPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Primary data storage
   const [orders, setOrders] = useState<Order[]>([]);
@@ -228,32 +235,41 @@ export default function App() {
     }
   };
 
-  // Helper login credentials options presets click trigger
-  const handlePresetLogin = (role: 'admin' | 'agent') => {
-    if (role === 'admin') {
-      setCurrentUser({
-        id: 'usr_admin',
-        name: 'Leopard Luxe CRM Admin',
-        email: 'admin@leopardluxe.co',
-        role: 'admin',
-        status: 'online',
-        lastActive: new Date().toISOString(),
-      });
-      setRemarksSelection('Leopard Luxe CRM Admin');
-      triggerToast('Administrator auth access confirmed!', 'success');
-    } else {
+  // Handle ID/Password login for co-agent and manager
+  const handleManualLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanId = inputId.trim();
+    const cleanPass = inputPassword;
+
+    if (cleanId === 'AGENT101' && cleanPass === 'Agent@121') {
       setCurrentUser({
         id: 'usr_agent',
-        name: 'Alice Agent',
-        email: 'alice@leopardluxe.co',
+        name: 'Co-Agent AGENT101',
+        email: 'agent101@leopardluxe.co',
         role: 'agent',
         status: 'online',
         lastActive: new Date().toISOString(),
       });
-      setRemarksSelection('Alice Agent');
-      triggerToast('Agent dashboard successfully authorized!', 'success');
+      setRemarksSelection('Co-Agent AGENT101');
+      triggerToast('Co-Agent (AGENT101) authenticated successfully!', 'success');
+      setActiveTab('dashboard');
+    } else if (cleanId === 'PRAWAT' && cleanPass === 'Sahil@2003') {
+      setCurrentUser({
+        id: 'usr_admin',
+        name: 'Manager PRAWAT',
+        email: 'prawat@leopardluxe.co',
+        role: 'admin',
+        status: 'online',
+        lastActive: new Date().toISOString(),
+      });
+      setRemarksSelection('Manager PRAWAT');
+      triggerToast('Manager (PRAWAT) authenticated successfully!', 'success');
+      setActiveTab('dashboard');
+    } else if (!cleanId || !cleanPass) {
+      triggerToast('Please fill in both ID and Password fields.', 'warn');
+    } else {
+      triggerToast('Invalid ID or Password credentials. Please try again.', 'warn');
     }
-    setActiveTab('dashboard');
   };
 
   // Custom session agent name references select helper
@@ -320,11 +336,11 @@ export default function App() {
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-lg bg-white/80 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-slate-250/60 dark:border-slate-800 p-8 rounded-2xl shadow-xl space-y-6 relative z-10 text-center"
+            className="w-full max-w-md bg-white/80 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-800 p-8 rounded-2xl shadow-xl space-y-6 relative z-10"
           >
             
             {/* Header logo custom visual panel */}
-            <div className="space-y-2">
+            <div className="space-y-2 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-550/10 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-600 dark:text-indigo-400 font-bold tracking-wider text-[10px]">
                 <Sparkles size={11} />
                 ADMIN & AGENT WORKSTATION
@@ -337,62 +353,67 @@ export default function App() {
               </p>
             </div>
 
-            {/* Simulated preset quick auth triggers */}
-            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Select your calling profile to log in
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Agent Access Choice Card */}
-                <button
-                  onClick={() => handlePresetLogin('agent')}
-                  className="p-4 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 text-left cursor-pointer transition-all flex flex-col justify-between h-36 relative overflow-hidden group shadow-sm"
-                >
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
-                      <User size={14} className="text-indigo-500" />
-                      CO-Agent Access
-                    </h4>
-                    <p className="text-[10px] text-slate-405 leading-normal m-0 pr-4">
-                      Dial pending client lists, WhatsApp templates, and log remarks.
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1 mt-4">
-                    Authorized Preset
-                    <ChevronRight size={10} className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+            {/* REAL ID/PASSWORD SIGN-IN FORM */}
+            <form onSubmit={handleManualLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                  User ID
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                    <User size={15} />
                   </span>
-                  <div className="absolute -right-5 -bottom-5 w-16 h-16 bg-indigo-500/5 group-hover:bg-indigo-500/10 rounded-full transition-colors"></div>
-                </button>
-
-                {/* Manager/Admin Access Choice Card */}
-                <button
-                  onClick={() => handlePresetLogin('admin')}
-                  className="p-4 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-left cursor-pointer transition-all flex flex-col justify-between h-36 relative overflow-hidden group shadow-sm"
-                >
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
-                      <ShieldCheck size={14} className="text-emerald-500" />
-                      Manager Access
-                    </h4>
-                    <p className="text-[10px] text-slate-405 leading-normal m-0 pr-4">
-                      Import CSV sheets, export reports, and inspect metrics tables.
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-450 font-mono flex items-center gap-1 mt-4">
-                    Authorized Preset
-                    <ChevronRight size={10} className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                  <div className="absolute -right-5 -bottom-5 w-16 h-16 bg-emerald-500/5 group-hover:bg-emerald-500/10 rounded-full transition-colors"></div>
-                </button>
+                  <input
+                    type="text"
+                    required
+                    value={inputId}
+                    onChange={(e) => setInputId(e.target.value)}
+                    placeholder="e.g. AGENT101 or PRAWAT"
+                    className="w-full text-sm pl-9 pr-4 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 flex justify-between">
+                  <span>Password</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                    <Lock size={15} />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={inputPassword}
+                    onChange={(e) => setInputPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full text-sm pl-9 pr-10 py-2.5 rounded-xl border border-slate-205 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border-0 mt-2 text-sm"
+              >
+                <LogIn size={16} />
+                Access Workstation
+              </button>
+            </form>
 
             {/* Safety policy warning tag */}
-            <div className="flex gap-2 p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150 dark:border-slate-800 text-left">
+            <div className="flex gap-2 p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150 dark:border-slate-800">
               <Terminal className="text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" size={14} />
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed m-0">
-                <strong>Local sandbox warning:</strong> All call logs and database changes persist within your terminal. Make sure to download exported CSV reports before restarting container hosts to preserve outcomes.
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed m-0 text-left">
+                <strong>Credential safety warning:</strong> This interface implements role-specific permissions based on user credentials. Manager credentials give operational reset, database imports and metrics.
               </p>
             </div>
 
