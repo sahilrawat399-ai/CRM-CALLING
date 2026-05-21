@@ -39,14 +39,6 @@ export interface Order {
   callAttempts: number;
   lastCalledAt?: string;
   createdAt: string;
-  // Live Google Sheets tracked fields
-  paymentMode?: string; // e.g. "COD", "Prepaid"
-  retry4HrStatus?: string; // e.g. "Pending", "Scheduled", "Busy", "No Answer", "Confirmed", "Not Needed"
-  retry4HrTime?: string;
-  retryDay2Status?: string; // e.g. "Pending", "Scheduled", "Busy", "No Answer", "Confirmed", "Not Needed"
-  retryDay2Time?: string;
-  whatsappStatus?: string; // "Yes", "No", "Pending"
-  addressVerified?: string; // "Yes", "No", "Pending"
 }
 
 export interface CallLog {

@@ -3,15 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import dotenv from 'dotenv';
-dotenv.config();
-
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-import { createClient } from '@supabase/supabase-js';
 import { Order, CallLog, StatusHistory, RealtimeStats, OrderStatus } from './src/types';
 
 const PORT = 3000;
@@ -236,12 +232,6 @@ interface DBObj {
   orders: Order[];
   callLogs: CallLog[];
   statusHistory: StatusHistory[];
-  connectedSheets?: string[];
-  supabaseConfig?: {
-    url: string;
-    anonKey: string;
-    useSupabaseAsPrimary: boolean;
-  };
 }
 
 // Ensure database file loaded
@@ -249,18 +239,7 @@ function loadDB(): DBObj {
   try {
     if (fs.existsSync(DB_FILE)) {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (!parsed.connectedSheets) {
-        parsed.connectedSheets = [];
-      }
-      if (!parsed.supabaseConfig) {
-        parsed.supabaseConfig = {
-          url: 'https://mfswenxcjpdzhbmxpdle.supabase.co',
-          anonKey: 'sb_publishable_eRZQRwWqYG3UG6MGc-pYZQ_HSHnWgHb',
-          useSupabaseAsPrimary: true
-        };
-      }
-      return parsed;
+      return JSON.parse(data);
     }
   } catch (err) {
     console.error('Error loading database:', err);
@@ -270,13 +249,7 @@ function loadDB(): DBObj {
   const initDb: DBObj = {
     orders: DEFAULT_ORDERS,
     callLogs: DEFAULT_CALLS,
-    statusHistory: DEFAULT_HISTORY,
-    connectedSheets: [],
-    supabaseConfig: {
-      url: 'https://mfswenxcjpdzhbmxpdle.supabase.co',
-      anonKey: 'sb_publishable_eRZQRwWqYG3UG6MGc-pYZQ_HSHnWgHb',
-      useSupabaseAsPrimary: true
-    }
+    statusHistory: DEFAULT_HISTORY
   };
   fs.writeFileSync(DB_FILE, JSON.stringify(initDb, null, 2), 'utf-8');
   return initDb;
@@ -289,222 +262,6 @@ function saveDB(data: DBObj) {
     console.error('Error saving database:', err);
   }
 }
-
-// ==========================================
-// SUPABASE BACKEND SYNCHRONIZATION UTILITIES
-// ==========================================
-
-const DEFAULT_SUPABASE_URL = 'https://mfswenxcjpdzhbmxpdle.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_eRZQRwWqYG3UG6MGc-pYZQ_HSHnWgHb';
-
-let supabaseClient: any = null;
-
-function initSupabase() {
-  const db = loadDB();
-  const url = process.env.SUPABASE_URL || db.supabaseConfig?.url || DEFAULT_SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY || db.supabaseConfig?.anonKey || DEFAULT_SUPABASE_KEY;
-
-  if (url && key) {
-    // Standardize URL by stripping rest/v1/ and other trails
-    let cleanUrl = String(url).trim().replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
-      cleanUrl = `https://${cleanUrl}`;
-    }
-    
-    try {
-      supabaseClient = createClient(cleanUrl, String(key).trim());
-      console.log(`Supabase client initialized for URL: ${cleanUrl}`);
-    } catch (err) {
-      console.error('Failed to initialize Supabase client:', err);
-      supabaseClient = null;
-    }
-  } else {
-    supabaseClient = null;
-  }
-}
-
-// Fire initial setup on bootstrap
-initSupabase();
-
-async function checkSupabaseStatus() {
-  if (!supabaseClient) {
-    return { connected: false, error: 'Supabase client is not initialized.' };
-  }
-  
-  const db = loadDB();
-  const url = process.env.SUPABASE_URL || db.supabaseConfig?.url || DEFAULT_SUPABASE_URL;
-  const usePrimary = db.supabaseConfig?.useSupabaseAsPrimary ?? true;
-
-  try {
-    const tableChecks: Record<string, { ok: boolean; error?: string }> = {
-      orders: { ok: false },
-      call_logs: { ok: false },
-      status_history: { ok: false },
-    };
-
-    // Probe orders table
-    const { error: orderErr } = await supabaseClient.from('orders').select('id').limit(1);
-    if (!orderErr) {
-      tableChecks.orders.ok = true;
-    } else {
-      tableChecks.orders.error = orderErr.message;
-    }
-
-    // Probe call_logs table
-    const { error: callsErr } = await supabaseClient.from('call_logs').select('id').limit(1);
-    if (!callsErr) {
-      tableChecks.call_logs.ok = true;
-    } else {
-      tableChecks.call_logs.error = callsErr.message;
-    }
-
-    // Probe status_history table
-    const { error: histErr } = await supabaseClient.from('status_history').select('id').limit(1);
-    if (!histErr) {
-      tableChecks.status_history.ok = true;
-    } else {
-      tableChecks.status_history.error = histErr.message;
-    }
-
-    const allTablesOk = tableChecks.orders.ok && tableChecks.call_logs.ok && tableChecks.status_history.ok;
-
-    return {
-      connected: true,
-      url,
-      useSupabaseAsPrimary: usePrimary,
-      allTablesOk,
-      tables: tableChecks,
-    };
-  } catch (err: any) {
-    return {
-      connected: false,
-      error: err.message || 'Unknown network error probing Supabase.',
-    };
-  }
-}
-
-async function fetchOrdersFromSupabase(): Promise<Order[] | null> {
-  if (!supabaseClient) return null;
-  try {
-    const { data, error } = await supabaseClient
-      .from('orders')
-      .select('*')
-      .order('createdAt', { ascending: false });
-    if (error) {
-      console.error('Error fetching orders from Supabase:', error);
-      return null;
-    }
-    return data as Order[];
-  } catch (err) {
-    console.error('Supabase fetchOrders exception:', err);
-    return null;
-  }
-}
-
-async function saveOrderToSupabase(order: Order): Promise<boolean> {
-  if (!supabaseClient) return false;
-  try {
-    const { error } = await supabaseClient
-      .from('orders')
-      .upsert(order);
-    if (error) {
-      console.error('Error upserting order to Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Supabase saveOrder exception:', err);
-    return false;
-  }
-}
-
-async function saveBulkOrdersToSupabase(ordersArray: Order[]): Promise<boolean> {
-  if (!supabaseClient || ordersArray.length === 0) return false;
-  try {
-    const { error } = await supabaseClient
-      .from('orders')
-      .upsert(ordersArray);
-    if (error) {
-      console.error('Error saving bulk orders to Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Supabase saveBulkOrders exception:', err);
-    return false;
-  }
-}
-
-async function fetchCallLogsFromSupabase(): Promise<CallLog[] | null> {
-  if (!supabaseClient) return null;
-  try {
-    const { data, error } = await supabaseClient
-      .from('call_logs')
-      .select('*')
-      .order('timestamp', { ascending: false });
-    if (error) {
-      console.error('Error fetching call logs from Supabase:', error);
-      return null;
-    }
-    return data as CallLog[];
-  } catch (err) {
-    console.error('Supabase fetchCallLogs exception:', err);
-    return null;
-  }
-}
-
-async function saveCallLogToSupabase(log: CallLog): Promise<boolean> {
-  if (!supabaseClient) return false;
-  try {
-    const { error } = await supabaseClient
-      .from('call_logs')
-      .upsert(log);
-    if (error) {
-      console.error('Error upserting call log to Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Supabase saveCallLog exception:', err);
-    return false;
-  }
-}
-
-async function fetchStatusHistoryFromSupabase(): Promise<StatusHistory[] | null> {
-  if (!supabaseClient) return null;
-  try {
-    const { data, error } = await supabaseClient
-      .from('status_history')
-      .select('*')
-      .order('timestamp', { ascending: false });
-    if (error) {
-      console.error('Error fetching status history from Supabase:', error);
-      return null;
-    }
-    return data as StatusHistory[];
-  } catch (err) {
-    console.error('Supabase fetchStatusHistory exception:', err);
-    return null;
-  }
-}
-
-async function saveStatusHistoryToSupabase(hist: StatusHistory): Promise<boolean> {
-  if (!supabaseClient) return false;
-  try {
-    const { error } = await supabaseClient
-      .from('status_history')
-      .upsert(hist);
-    if (error) {
-      console.error('Error upserting status history to Supabase:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error('Supabase saveStatusHistory exception:', err);
-    return false;
-  }
-}
-
 
 // Initialize Gemini Client
 let geminiAvailable = false;
@@ -583,143 +340,89 @@ app.get('/api/health', (req, res) => {
 });
 
 // GET statistics
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', (req, res) => {
   const db = loadDB();
-  let ordersList = db.orders;
-  if (db.supabaseConfig?.useSupabaseAsPrimary) {
-    const sOrders = await fetchOrdersFromSupabase();
-    if (sOrders !== null) {
-      ordersList = sOrders;
-    }
-  }
-  res.json(computeStats(ordersList));
+  res.json(computeStats(db.orders));
 });
 
 // GET all orders
-app.get('/api/orders', async (req, res) => {
+app.get('/api/orders', (req, res) => {
   const db = loadDB();
-  if (db.supabaseConfig?.useSupabaseAsPrimary) {
-    const sOrders = await fetchOrdersFromSupabase();
-    if (sOrders !== null) {
-      return res.json(sOrders);
-    }
-  }
   res.json(db.orders);
 });
 
 // GET specific order summary / details
-app.get('/api/orders/:id', async (req, res) => {
+app.get('/api/orders/:id', (req, res) => {
   const db = loadDB();
-  let order = db.orders.find((o) => o.id === req.params.id);
-  let logs = db.callLogs.filter((l) => l.orderId === req.params.id);
-  let history = db.statusHistory.filter((h) => h.orderId === req.params.id);
-
-  if (db.supabaseConfig?.useSupabaseAsPrimary && supabaseClient) {
-    try {
-      const { data: sOrder, error: oErr } = await supabaseClient.from('orders').select('*').eq('id', req.params.id).maybeSingle();
-      const { data: sLogs, error: lErr } = await supabaseClient.from('call_logs').select('*').eq('orderId', req.params.id).order('timestamp', { ascending: false });
-      const { data: sHist, error: hErr } = await supabaseClient.from('status_history').select('*').eq('orderId', req.params.id).order('timestamp', { ascending: false });
-
-      if (!oErr && sOrder) {
-        order = sOrder as Order;
-      }
-      if (!lErr && sLogs) {
-        logs = sLogs as CallLog[];
-      }
-      if (!hErr && sHist) {
-        history = sHist as StatusHistory[];
-      }
-    } catch (err) {
-      console.error('Supabase fetch individual order details exception:', err);
-    }
-  }
-
+  const order = db.orders.find((o) => o.id === req.params.id);
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
   }
+  const logs = db.callLogs.filter((l) => l.orderId === order.id);
+  const history = db.statusHistory.filter((h) => h.orderId === order.id);
   res.json({ order, logs, history });
 });
 
 // POST load/upload bulk orders (excel or csv parsed on client)
-app.post('/api/orders/upload', async (req, res) => {
-  try {
-    const { orders: uploadedOrders } = req.body;
-    
-    if (!Array.isArray(uploadedOrders)) {
-      return res.status(400).json({ error: 'Invalid payload. Standard list expected under "orders".' });
-    }
-
-    const db = loadDB();
-    let duplicatesCount = 0;
-    let addedCount = 0;
-    const newlyAddedOrders: Order[] = [];
-
-    uploadedOrders.forEach((o: any) => {
-      // Validate phone number presence and name
-      if (!o || !o.phoneNumber || !o.customerName) {
-        return;
-      }
-
-      // Clean duplicate phone & product matches to prevent multiple sales listings
-      const cleanedPhone = String(o.phoneNumber).trim();
-      const isDuplicate = db.orders.some(
-        (existing) => {
-          const existingPhone = String(existing?.phoneNumber || '').trim();
-          const existingProd = String(existing?.productName || '').trim().toLowerCase();
-          const currentProd = String(o.productName || '').trim().toLowerCase();
-          return existingPhone.replace(/\s+/g, '') === cleanedPhone.replace(/\s+/g, '') &&
-                 existingProd === currentProd;
-        }
-      );
-
-      if (isDuplicate) {
-        duplicatesCount++;
-      } else {
-        const newOrder: Order = {
-          id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          customerName: String(o.customerName).trim(),
-          phoneNumber: cleanedPhone,
-          productName: String(o.productName || 'E-commerce Product').trim(),
-          codAmount: Number(o.codAmount) || 0,
-          address: String(o.address || '').trim(),
-          city: String(o.city || '').trim(),
-          state: String(o.state || '').trim(),
-          pincode: String(o.pincode || '').trim(),
-          status: (o.status as OrderStatus) || 'Pending',
-          notes: String(o.notes || '').trim(),
-          callAttempts: 0,
-          createdAt: new Date().toISOString(),
-          paymentMode: String(o.paymentMode || 'COD').trim(),
-          retry4HrStatus: String(o.retry4HrStatus || 'Pending').trim(),
-          retryDay2Status: String(o.retryDay2Status || 'Pending').trim(),
-          whatsappStatus: String(o.whatsappStatus || 'Pending').trim(),
-          addressVerified: String(o.addressVerified || 'Pending').trim(),
-        };
-        db.orders.unshift(newOrder);
-        newlyAddedOrders.push(newOrder);
-        addedCount++;
-      }
-    });
-
-    saveDB(db);
-
-    if (newlyAddedOrders.length > 0 && db.supabaseConfig?.useSupabaseAsPrimary) {
-      await saveBulkOrdersToSupabase(newlyAddedOrders);
-    }
-
-    // Broadcast realtime update to sync across other user nodes
-    broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
-
-    res.json({
-      success: true,
-      added: addedCount,
-      duplicatesSkipped: duplicatesCount,
-      totalCount: db.orders.length,
-    });
-  } catch (error: any) {
-    console.error('Core order upload error:', error);
-    res.status(500).json({ error: 'Failed to process spreadsheet upload due to server error: ' + error.message });
+app.post('/api/orders/upload', (req, res) => {
+  const { orders: uploadedOrders } = req.body;
+  
+  if (!Array.isArray(uploadedOrders)) {
+    return res.status(400).json({ error: 'Invalid payload. Standard list expected under "orders".' });
   }
+
+  const db = loadDB();
+  let duplicatesCount = 0;
+  let addedCount = 0;
+
+  uploadedOrders.forEach((o: any) => {
+    // Validate phone number presence and name
+    if (!o.phoneNumber || !o.customerName) {
+      return;
+    }
+
+    // Clean duplicate phone & product matches to prevent multiple sales listings
+    const cleanedPhone = String(o.phoneNumber).trim();
+    const isDuplicate = db.orders.some(
+      (existing) =>
+        existing.phoneNumber.replace(/\s+/g, '') === cleanedPhone.replace(/\s+/g, '') &&
+        existing.productName.toLowerCase() === String(o.productName || '').trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      duplicatesCount++;
+    } else {
+      const newOrder: Order = {
+        id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        customerName: String(o.customerName).trim(),
+        phoneNumber: cleanedPhone,
+        productName: String(o.productName || 'E-commerce Product').trim(),
+        codAmount: Number(o.codAmount) || 0,
+        address: String(o.address || '').trim(),
+        city: String(o.city || '').trim(),
+        state: String(o.state || '').trim(),
+        pincode: String(o.pincode || '').trim(),
+        status: (o.status as OrderStatus) || 'Pending',
+        notes: String(o.notes || '').trim(),
+        callAttempts: 0,
+        createdAt: new Date().toISOString(),
+      };
+      db.orders.unshift(newOrder);
+      addedCount++;
+    }
+  });
+
+  saveDB(db);
+
+  // Broadcast realtime update to sync across other user nodes
+  broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
+
+  res.json({
+    success: true,
+    added: addedCount,
+    duplicatesSkipped: duplicatesCount,
+    totalCount: db.orders.length,
+  });
 });
 
 // POST to record customer call log and update status
@@ -769,40 +472,8 @@ app.post('/api/orders/:id/call-log', (req, res) => {
   order.callAttempts += 1;
   order.lastCalledAt = new Date().toISOString();
 
-  // Map and trigger automatic retry schedules
-  const missedAttempts = ['No Answer', 'Busy', 'Wrong Number', 'Callback Later'].includes(status);
-  
-  if (missedAttempts) {
-    if (order.callAttempts === 1) {
-      order.retry4HrStatus = 'Scheduled';
-      order.retry4HrTime = new Date(Date.now() + 4 * 3600 * 1000).toISOString(); // 4 hours later
-    } else if (order.callAttempts === 2) {
-      order.retry4HrStatus = 'No Answer';
-      order.retryDay2Status = 'Scheduled';
-      order.retryDay2Time = new Date(Date.now() + 48 * 3600 * 1000).toISOString(); // 2 days later
-    } else if (order.callAttempts >= 3) {
-      order.retryDay2Status = 'No Answer';
-    }
-  } else if (status === 'Confirmed') {
-    order.retry4HrStatus = 'Not Needed';
-    order.retryDay2Status = 'Not Needed';
-    order.whatsappStatus = 'Yes';
-    order.addressVerified = 'Yes';
-  } else if (status === 'Cancelled' || status === 'Fake Order') {
-    order.retry4HrStatus = 'Not Needed';
-    order.retryDay2Status = 'Not Needed';
-  }
-
   db.orders[orderIndex] = order;
   saveDB(db);
-
-  if (db.supabaseConfig?.useSupabaseAsPrimary) {
-    Promise.all([
-      saveOrderToSupabase(order),
-      saveCallLogToSupabase(newLog),
-      saveStatusHistoryToSupabase(changesLogged)
-    ]).catch(err => console.error('Background Supabase logging failed:', err));
-  }
 
   // Notify active listener pipelines
   broadcastUpdate('order_updated', { orderId, status, duration });
@@ -812,14 +483,8 @@ app.post('/api/orders/:id/call-log', (req, res) => {
 });
 
 // GET all call historical remarks logs
-app.get('/api/calls', async (req, res) => {
+app.get('/api/calls', (req, res) => {
   const db = loadDB();
-  if (db.supabaseConfig?.useSupabaseAsPrimary) {
-    const sCalls = await fetchCallLogsFromSupabase();
-    if (sCalls !== null) {
-      return res.json(sCalls);
-    }
-  }
   res.json(db.callLogs);
 });
 
@@ -1000,57 +665,6 @@ app.post('/api/ai/speech-to-text', async (req, res) => {
   res.json({ text: randomTranscript });
 });
 
-// POST to update meta fields of an order
-app.post('/api/orders/:id/update-fields', (req, res) => {
-  const { id: orderId } = req.params;
-  const { whatsappStatus, addressVerified, paymentMode, retry4HrStatus, retryDay2Status } = req.body;
-
-  const db = loadDB();
-  const orderIndex = db.orders.findIndex((o) => o.id === orderId);
-
-  if (orderIndex === -1) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  const order = db.orders[orderIndex];
-  if (whatsappStatus !== undefined) order.whatsappStatus = whatsappStatus;
-  if (addressVerified !== undefined) order.addressVerified = addressVerified;
-  if (paymentMode !== undefined) order.paymentMode = paymentMode;
-  if (retry4HrStatus !== undefined) order.retry4HrStatus = retry4HrStatus;
-  if (retryDay2Status !== undefined) order.retryDay2Status = retryDay2Status;
-
-  db.orders[orderIndex] = order;
-  saveDB(db);
-
-  if (db.supabaseConfig?.useSupabaseAsPrimary) {
-    saveOrderToSupabase(order).catch(err => console.error('Supabase update order fields failed:', err));
-  }
-
-  broadcastUpdate('order_updated', { orderId, status: order.status });
-  res.json({ success: true, order });
-});
-
-// GET Settings (including Google Spreadsheet Live IDs)
-app.get('/api/admin/settings', (req, res) => {
-  const db = loadDB();
-  res.json({ connectedSheets: db.connectedSheets || [] });
-});
-
-// POST Settings
-app.post('/api/admin/settings', (req, res) => {
-  const { connectedSheets } = req.body;
-  
-  if (!Array.isArray(connectedSheets)) {
-    return res.status(400).json({ error: 'Invalid config. "connectedSheets" must be an array.' });
-  }
-
-  const db = loadDB();
-  db.connectedSheets = connectedSheets;
-  saveDB(db);
-
-  res.json({ success: true, connectedSheets });
-});
-
 // Admin panel actions: Export / Reset CRM logs
 app.post('/api/admin/reset-data', (req, res) => {
   const initDb: DBObj = {
@@ -1061,123 +675,6 @@ app.post('/api/admin/reset-data', (req, res) => {
   saveDB(initDb);
   broadcastUpdate('orders_synchronized', { total: initDb.orders.length, updated: true });
   res.json({ success: true, message: 'CRM Database re-seeded to default profiles!' });
-});
-
-// GET Supabase status & table structures
-app.get('/api/supabase/status', async (req, res) => {
-  const status = await checkSupabaseStatus();
-  res.json(status);
-});
-
-// POST update Supabase configuration parameters
-app.post('/api/supabase/config', (req, res) => {
-  const { url, anonKey, useSupabaseAsPrimary } = req.body;
-  if (!url || !anonKey) {
-    return res.status(400).json({ error: 'Supabase Project URL and Anon Key are required.' });
-  }
-
-  const db = loadDB();
-  db.supabaseConfig = {
-    url: String(url).trim(),
-    anonKey: String(anonKey).trim(),
-    useSupabaseAsPrimary: !!useSupabaseAsPrimary
-  };
-  saveDB(db);
-  initSupabase();
-
-  res.json({ success: true, config: db.supabaseConfig });
-});
-
-// POST Migrate local data records (db.json) directly to live Supabase tables
-app.post('/api/supabase/migrate', async (req, res) => {
-  if (!supabaseClient) {
-    return res.status(400).json({ error: 'Supabase client has not been configured.' });
-  }
-
-  try {
-    const db = loadDB();
-    let migratedOrders = 0;
-    let migratedCalls = 0;
-    let migratedHist = 0;
-
-    // Migrate orders
-    if (db.orders.length > 0) {
-      const { error: oErr } = await supabaseClient.from('orders').upsert(db.orders);
-      if (oErr) throw new Error(`Orders migration failed: ${oErr.message}`);
-      migratedOrders = db.orders.length;
-    }
-
-    // Migrate call logs
-    if (db.callLogs.length > 0) {
-      const { error: cErr } = await supabaseClient.from('call_logs').upsert(db.callLogs);
-      if (cErr) throw new Error(`Call logs migration failed: ${cErr.message}`);
-      migratedCalls = db.callLogs.length;
-    }
-
-    // Migrate status history
-    if (db.statusHistory.length > 0) {
-      const { error: hErr } = await supabaseClient.from('status_history').upsert(db.statusHistory);
-      if (hErr) throw new Error(`Status history migration failed: ${hErr.message}`);
-      migratedHist = db.statusHistory.length;
-    }
-
-    // Notify listeners
-    broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
-
-    res.json({
-      success: true,
-      message: 'Migration completed successfully!',
-      ordersCount: migratedOrders,
-      callsCount: migratedCalls,
-      historyCount: migratedHist,
-    });
-  } catch (err: any) {
-    console.error('Supabase migration exception:', err);
-    res.status(500).json({ error: err.message || 'Supabase migration failed.' });
-  }
-});
-
-// POST Pull Supabase database to replace local db.json cache
-app.post('/api/supabase/pull', async (req, res) => {
-  if (!supabaseClient) {
-    return res.status(400).json({ error: 'Supabase client has not been configured.' });
-  }
-
-  try {
-    const orders = await fetchOrdersFromSupabase();
-    if (orders === null) {
-      return res.status(400).json({ error: 'Could not read "orders" table. Please check if your tables exist in Supabase.' });
-    }
-
-    const callLogs = await fetchCallLogsFromSupabase();
-    if (callLogs === null) {
-      return res.status(400).json({ error: 'Could not read "call_logs" table.' });
-    }
-
-    const statusHistory = await fetchStatusHistoryFromSupabase();
-    if (statusHistory === null) {
-      return res.status(400).json({ error: 'Could not read "status_history" table.' });
-    }
-
-    const db = loadDB();
-    db.orders = orders;
-    db.callLogs = callLogs;
-    db.statusHistory = statusHistory;
-    saveDB(db);
-
-    broadcastUpdate('orders_synchronized', { total: db.orders.length, updated: true });
-
-    res.json({
-      success: true,
-      message: 'Successfully pulled remote Supabase database and synchronized local storage!',
-      ordersCount: orders.length,
-      callsCount: callLogs.length,
-      historyCount: statusHistory.length
-    });
-  } catch (err: any) {
-    console.error('Supabase pull exception:', err);
-    res.status(500).json({ error: err.message || 'Supabase pull failed.' });
-  }
 });
 
 async function startServer() {

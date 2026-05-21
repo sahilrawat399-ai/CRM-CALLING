@@ -25,23 +25,12 @@ interface OrderRecordsProps {
   orders: Order[];
   onSelectOrderInDialer: (orderId: string) => void;
   onResetDatabase: () => void;
-  onUpdateField?: (
-    orderId: string,
-    fields: {
-      whatsappStatus?: string;
-      addressVerified?: string;
-      paymentMode?: string;
-      retry4HrStatus?: string;
-      retryDay2Status?: string;
-    }
-  ) => void;
 }
 
 export default function OrderRecords({
   orders,
   onSelectOrderInDialer,
   onResetDatabase,
-  onUpdateField,
 }: OrderRecordsProps) {
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -111,48 +100,39 @@ export default function OrderRecords({
 
   const totalPages = Math.ceil(filteredOrders.length / rowsPerPage) || 1;
 
-  // Map and export filtered orders list in validated Google Sheets format
+  // Export filtered orders list to CSV download natively in client browser
   const handleExportCSV = () => {
     const headers = [
-      'Order Date',
-      'Order number',
-      'Custommer Name',
+      'Order ID',
+      'Customer Name',
       'Phone Number',
-      'Full Address',
-      'Order amount',
-      'Payment Mode',
       'Product Name',
-      'Order Confirmed',
-      'Call Status',
-      '4 HR',
-      'Day 2',
-      'Remarks',
-      'Whatsapp Confirmation Sent',
-      'Address Verified'
+      'COD Amount',
+      'Address',
+      'City',
+      'State',
+      'Pincode',
+      'Status',
+      'Attempts',
+      'Last Called At',
+      'Created At'
     ];
 
-    const dataRows = filteredOrders.map((o) => {
-      const orderConfirmed = o.status === 'Confirmed' ? 'Yes' : (o.status === 'Cancelled' ? 'No' : 'Pending');
-      const fullAddress = `${o.address}, ${o.city || ''}, ${o.state || ''} ${o.pincode || ''}`.replace(/,\s*,/g, ',').trim();
-      
-      return [
-        new Date(o.createdAt).toLocaleDateString(),
-        o.id,
-        o.customerName,
-        o.phoneNumber,
-        fullAddress,
-        o.codAmount,
-        o.paymentMode || 'COD',
-        o.productName,
-        orderConfirmed,
-        o.status,
-        o.retry4HrStatus || 'Pending',
-        o.retryDay2Status || 'Pending',
-        o.notes || '',
-        o.whatsappStatus || 'Pending',
-        o.addressVerified || 'Pending'
-      ];
-    });
+    const dataRows = filteredOrders.map((o) => [
+      o.id,
+      o.customerName,
+      o.phoneNumber,
+      o.productName,
+      o.codAmount,
+      o.address,
+      o.city || '',
+      o.state || '',
+      o.pincode || '',
+      o.status,
+      o.callAttempts,
+      o.lastCalledAt || '',
+      o.createdAt
+    ]);
 
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
@@ -161,7 +141,7 @@ export default function OrderRecords({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `leopard_luxe_crm_report_${Date.now()}.csv`);
+    link.setAttribute('download', `leopard_luxe_crm_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -370,15 +350,10 @@ export default function OrderRecords({
                 <tr className="bg-slate-50/60 dark:bg-slate-850/40 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-100 dark:border-slate-800 text-[10px]">
                   <th className="py-3 px-4">Customer info</th>
                   <th className="py-3 px-4">stock Item details</th>
-                  <th className="py-3 px-4">Payment</th>
-                  <th className="py-3 px-3">COD Cost due</th>
+                  <th className="py-3 px-4">COD Cost due</th>
                   <th className="py-3 px-4">Destiny Region</th>
                   <th className="py-3 px-4">E-comm status</th>
-                  <th className="py-3 px-2 text-center">4 HR</th>
-                  <th className="py-3 px-2 text-center">Day 2</th>
-                  <th className="py-3 px-3 text-center">WhatsApp Sent</th>
-                  <th className="py-3 px-3 text-center">Address Ok</th>
-                  <th className="py-3 px-3 text-center">Attempts</th>
+                  <th className="py-3 px-4 text-center">Attempts</th>
                   <th className="py-3 px-4 text-right">Quick dial Actions</th>
                 </tr>
               </thead>
@@ -401,7 +376,7 @@ export default function OrderRecords({
 
                     {/* product cell SKU */}
                     <td className="py-3.5 px-4">
-                      <div className="max-w-[150px] truncate">
+                      <div className="max-w-[180px] truncate">
                         <span className="font-semibold text-slate-700 dark:text-slate-300 block truncate text-xs">{o.productName}</span>
                         <span className="text-[10px] text-slate-400 block truncate font-mono">
                           Registry date:{' '}
@@ -413,27 +388,15 @@ export default function OrderRecords({
                       </div>
                     </td>
 
-                    {/* Payment Mode Selector */}
-                    <td className="py-3.5 px-4">
-                      <select
-                        value={o.paymentMode || 'COD'}
-                        onChange={(e) => onUpdateField?.(o.id, { paymentMode: e.target.value })}
-                        className="bg-slate-105 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-855 outline-none rounded-md px-1.5 py-1 text-[11px] font-bold font-mono text-slate-700 dark:text-slate-200 cursor-pointer text-center"
-                      >
-                        <option value="COD">COD</option>
-                        <option value="Prepaid">Prepaid</option>
-                      </select>
-                    </td>
-
                     {/* Amount cost cell */}
-                    <td className="py-3.5 px-3 font-bold font-mono text-emerald-600 dark:text-emerald-400 text-xs">
+                    <td className="py-3.5 px-4 font-bold font-mono text-emerald-600 dark:text-emerald-400 text-xs">
                       ₹{o.codAmount.toLocaleString()}
                     </td>
 
                     {/* Address city pin cell */}
                     <td className="py-3.5 px-4">
                       <div>
-                        <span className="font-semibold text-slate-805 dark:text-slate-300 block truncate max-w-[124px] text-xs" title={o.address}>
+                        <span className="font-semibold text-slate-805 dark:text-slate-300 block truncate max-w-[140px] text-xs" title={o.address}>
                           {o.address}
                         </span>
                         <span className="text-[10px] text-slate-400 block font-semibold">{o.city} {o.pincode}</span>
@@ -443,64 +406,8 @@ export default function OrderRecords({
                     {/* status badge cell */}
                     <td className="py-3.5 px-4">{getStatusBadge(o.status)}</td>
 
-                    {/* 4 HR retry status */}
-                    <td className="py-3.5 px-2 text-center text-[10px]">
-                      <span className={`inline-block px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-[9px] ${
-                        o.retry4HrStatus === 'Scheduled' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                        o.retry4HrStatus === 'No Answer' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                        o.retry4HrStatus === 'Not Needed' ? 'bg-slate-800 text-slate-500' :
-                        'bg-slate-50 dark:bg-slate-900 text-slate-400'
-                      }`} title={o.retry4HrTime ? `Scheduled At: ${new Date(o.retry4HrTime).toLocaleString()}` : ''}>
-                        {o.retry4HrStatus || 'Pending'}
-                      </span>
-                    </td>
-
-                    {/* Day 2 retry status */}
-                    <td className="py-3.5 px-2 text-center text-[10px]">
-                      <span className={`inline-block px-2 py-0.5 rounded-full font-bold uppercase tracking-wide text-[9px] ${
-                        o.retryDay2Status === 'Scheduled' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                        o.retryDay2Status === 'No Answer' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                        o.retryDay2Status === 'Not Needed' ? 'bg-slate-800 text-slate-500' :
-                        'bg-slate-50 dark:bg-slate-900 text-slate-400'
-                      }`} title={o.retryDay2Time ? `Scheduled At: ${new Date(o.retryDay2Time).toLocaleString()}` : ''}>
-                        {o.retryDay2Status || 'Pending'}
-                      </span>
-                    </td>
-
-                    {/* Whatsapp Sent status toggle dropdown */}
-                    <td className="py-3.5 px-3 text-center">
-                      <select
-                        value={o.whatsappStatus || 'Pending'}
-                        onChange={(e) => onUpdateField?.(o.id, { whatsappStatus: e.target.value })}
-                        className={`bg-slate-105 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-855 outline-none rounded-md px-1.5 py-1 text-[11px] font-bold cursor-pointer text-center ${
-                          o.whatsappStatus === 'Yes' ? 'text-emerald-500' :
-                          o.whatsappStatus === 'No' ? 'text-rose-500' : 'text-slate-400'
-                        }`}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                    </td>
-
-                    {/* Address verify status toggle dropdown */}
-                    <td className="py-3.5 px-3 text-center">
-                      <select
-                        value={o.addressVerified || 'Pending'}
-                        onChange={(e) => onUpdateField?.(o.id, { addressVerified: e.target.value })}
-                        className={`bg-slate-105 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200/50 dark:border-slate-855 outline-none rounded-md px-1.5 py-1 text-[11px] font-bold cursor-pointer text-center ${
-                          o.addressVerified === 'Yes' ? 'text-indigo-400' :
-                          o.addressVerified === 'No' ? 'text-rose-500' : 'text-slate-400'
-                        }`}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Yes font-bold">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                    </td>
-
                     {/* Call attempts details */}
-                    <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
+                    <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200">
                       {o.callAttempts}
                     </td>
 

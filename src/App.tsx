@@ -37,11 +37,6 @@ import UploadSection from './components/UploadSection';
 import CallingPanel from './components/CallingPanel';
 import OrderRecords from './components/OrderRecords';
 import AdminPanel from './components/AdminPanel';
-import GoogleSheetsSync from './components/GoogleSheetsSync';
-import SupabaseSync from './components/SupabaseSync';
-import { initAuth, signInWithGoogle, logoutGoogle } from './lib/firebaseAuth';
-import { syncOrderToSpreadsheet } from './lib/googleSheets';
-import { Link2 } from 'lucide-react';
 
 export default function App() {
   // Theme state switcher (supporting light/dark glassmorphic mode)
@@ -71,7 +66,7 @@ export default function App() {
   });
 
   // Action view state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'dialer' | 'orders' | 'upload' | 'admin' | 'sheets' | 'supabase'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'dialer' | 'orders' | 'upload' | 'admin'>('dashboard');
   const [activeOrderIndex, setActiveOrderIndex] = useState<number>(0);
 
   // Connection Stream SSE state representation
@@ -80,12 +75,6 @@ export default function App() {
   // Toast Alerts engine state
   const [toasts, setToasts] = useState<{ id: string; msg: string; type: 'success' | 'info' | 'warn' }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Google Sheets integration state
-  const [googleUser, setGoogleUser] = useState<any | null>(null);
-  const [googleToken, setGoogleToken] = useState<string | null>(null);
-  const [connectedSheets, setConnectedSheets] = useState<string[]>([]);
-  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
 
   // Toast dynamic alert dispatcher helper
   const triggerToast = useCallback((msg: string, type: 'success' | 'info' | 'warn' = 'success') => {
@@ -133,41 +122,10 @@ export default function App() {
     }
   };
 
-  const fetchSettings = async () => {
-    try {
-      const response = await fetch('/api/admin/settings');
-      if (response.ok) {
-        const data = await response.json();
-        setConnectedSheets(data.connectedSheets || []);
-      }
-    } catch (err) {
-      console.error('Settings fetch error:', err);
-    }
-  };
-
   const reloadData = useCallback(async () => {
     setIsLoading(true);
-    await Promise.all([fetchOrders(), fetchCalls(), loadStats(), fetchSettings()]);
+    await Promise.all([fetchOrders(), fetchCalls(), loadStats()]);
     setIsLoading(false);
-  }, []);
-
-  // Initialize and listen to Google Auth state
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (user, token) => {
-        setGoogleUser(user);
-        setGoogleToken(token);
-      },
-      () => {
-        setGoogleUser(null);
-        setGoogleToken(null);
-      }
-    );
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
   }, []);
 
   // Initialize and register Server-Sent Events (SSE) live pipeline listeners
@@ -250,33 +208,8 @@ export default function App() {
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const updatedOrder = result.order;
-
         // Redundant reload for local fallback states if connection lags
         await reloadData();
-
-        // Perform Google Sheet updates in real-time
-        if (googleToken && connectedSheets.length > 0 && updatedOrder) {
-          setIsSyncingSheets(true);
-          try {
-            let syncSuccess = 0;
-            for (const sheetId of connectedSheets) {
-              const ok = await syncOrderToSpreadsheet(googleToken, sheetId, updatedOrder, log.remarks);
-              if (ok) syncSuccess++;
-            }
-            if (syncSuccess > 0) {
-              triggerToast(`Live Sync: Synced change to ${syncSuccess}/${connectedSheets.length} connected sheets!`, 'success');
-            } else {
-              triggerToast('Live Sync could not write row. Check Google Sheet edit permissions.', 'warn');
-            }
-          } catch (sheetsErr) {
-            console.error('Spreadsheets live sync mismatch error:', sheetsErr);
-            triggerToast('Token expired. Re-authorize Google sheets connection.', 'warn');
-          } finally {
-            setIsSyncingSheets(false);
-          }
-        }
         return true;
       }
     } catch (err) {
@@ -284,74 +217,6 @@ export default function App() {
       triggerToast('Server link timed out, please save calling remarks again.', 'warn');
     }
     return false;
-  };
-
-  // Update specific meta parameters of an order (payment mode, WhatsApp status, address verification) and sync with sheet
-  const handleUpdateOrderFields = async (
-    orderId: string,
-    fields: {
-      whatsappStatus?: string;
-      addressVerified?: string;
-      paymentMode?: string;
-      retry4HrStatus?: string;
-      retryDay2Status?: string;
-    }
-  ) => {
-    try {
-      const response = await fetch(`/api/orders/${orderId}/update-fields`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fields),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const updatedOrder = result.order;
-        await reloadData();
-
-        // Perform Google Sheet updates in real-time
-        if (googleToken && connectedSheets.length > 0 && updatedOrder) {
-          setIsSyncingSheets(true);
-          try {
-            let syncSuccess = 0;
-            for (const sheetId of connectedSheets) {
-              const ok = await syncOrderToSpreadsheet(googleToken, sheetId, updatedOrder);
-              if (ok) syncSuccess++;
-            }
-            if (syncSuccess > 0) {
-              triggerToast(`Live Sync: Synced field updates to connected sheets!`, 'success');
-            }
-          } catch (sheetsErr) {
-            console.error('Spreadsheet live sync field update error:', sheetsErr);
-          } finally {
-            setIsSyncingSheets(false);
-          }
-        } else {
-          triggerToast('Field updated successfully.', 'success');
-        }
-      }
-    } catch (err) {
-      console.error('Error updating order fields:', err);
-      triggerToast('Could not save field updates.', 'warn');
-    }
-  };
-
-  // Save settings for connected sheets lists in backend database
-  const handleSaveSettings = async (sheetsList: string[]) => {
-    try {
-      const response = await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectedSheets: sheetsList }),
-      });
-      if (response.ok) {
-        setConnectedSheets(sheetsList);
-        triggerToast('Connected Google Sheets updated successfully!', 'success');
-      }
-    } catch (err) {
-      console.error('Error saving sheets settings:', err);
-      triggerToast('Error updating Google Sheets configurations.', 'warn');
-    }
   };
 
   // Seeding test databases reset values
@@ -728,26 +593,6 @@ export default function App() {
                 <span>Manager Performance</span>
               </button>
 
-              {/* Tab controller button 6 -> Google Sheets live channel synchronization */}
-              <button
-                onClick={() => setActiveTab('sheets')}
-                className={`w-full text-left p-3 rounded-xl border text-xs font-semibold flex items-center gap-2.5 transition-all cursor-pointer ${
-                  activeTab === 'sheets'
-                    ? 'bg-indigo-650 text-white border-indigo-650 shadow-md'
-                    : 'bg-transparent border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/40'
-                }`}
-              >
-                <Link2 size={16} />
-                <div className="flex justify-between items-center w-full min-w-0">
-                  <span className="truncate">Google Sheets Live</span>
-                  {connectedSheets.length > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500 text-white font-mono shrink-0">
-                      {connectedSheets.length}
-                    </span>
-                  )}
-                </div>
-              </button>
-
               {/* Custom agent selector footer panel */}
               {currentUser.role === 'admin' && (
                 <div className="pt-6 border-t border-slate-100 dark:border-slate-800 hidden md:block space-y-1.5 text-xs">
@@ -776,8 +621,6 @@ export default function App() {
                   calls={calls}
                   stats={stats}
                   onNavigateToCalling={() => setActiveTab('dialer')}
-                  connectedSheets={connectedSheets}
-                  onNavigateToSheets={() => setActiveTab('sheets')}
                 />
               )}
 
@@ -797,7 +640,6 @@ export default function App() {
                   orders={orders}
                   onSelectOrderInDialer={handleSelectOrderInDialer}
                   onResetDatabase={handleResetDatabase}
-                  onUpdateField={handleUpdateOrderFields}
                 />
               )}
 
@@ -817,66 +659,6 @@ export default function App() {
                   calls={calls}
                   orders={orders}
                   onResetDatabase={handleResetDatabase}
-                />
-              )}
-
-              {activeTab === 'sheets' && (
-                <GoogleSheetsSync
-                  orders={orders}
-                  connectedSheets={connectedSheets}
-                  googleUser={googleUser}
-                  googleToken={googleToken}
-                  onSignIn={async () => {
-                    try {
-                      const res = await signInWithGoogle();
-                      if (res) {
-                        setGoogleUser(res.user);
-                        setGoogleToken(res.accessToken);
-                        triggerToast('Successfully signed in with Google Workspace!', 'success');
-                      }
-                    } catch (err: any) {
-                      console.error('Google Sign-in failed:', err);
-                      let errMsg = 'Google authorization failed or was dismissed.';
-                      
-                      // Highlight common iframe sandbox popup constraints
-                      if (err?.code === 'auth/popup-blocked') {
-                        errMsg = 'Google popup blocked! Please click "Open in New Tab" ↗ at the top right to complete authorization.';
-                      } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
-                        errMsg = 'Sign-in window was closed before completion.';
-                      } else if (err?.message) {
-                        errMsg = `Auth failed: ${err.message}`;
-                      }
-                      
-                      triggerToast(errMsg, 'warn');
-                    }
-                  }}
-                  onSignOut={async () => {
-                    try {
-                      await logoutGoogle();
-                      triggerToast('Google account disconnected.', 'info');
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  onAddSheet={(idOrUrl) => {
-                    let idToSave = idOrUrl.trim();
-                    const urlMatch = idToSave.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-                    if (urlMatch && urlMatch[1]) {
-                      idToSave = urlMatch[1];
-                    }
-
-                    if (connectedSheets.includes(idToSave)) {
-                      triggerToast('Spreadsheet already connected.', 'warn');
-                      return;
-                    }
-                    const updated = [...connectedSheets, idToSave];
-                    handleSaveSettings(updated);
-                  }}
-                  onRemoveSheet={(id) => {
-                    const updated = connectedSheets.filter(s => s !== id);
-                    handleSaveSettings(updated);
-                  }}
-                  triggerToast={triggerToast}
                 />
               )}
 
