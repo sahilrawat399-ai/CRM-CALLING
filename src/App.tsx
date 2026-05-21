@@ -827,11 +827,26 @@ export default function App() {
                   googleToken={googleToken}
                   onSignIn={async () => {
                     try {
-                      await signInWithGoogle();
-                      triggerToast('Successfully signed in with Google Workspace!', 'success');
-                    } catch (err) {
+                      const res = await signInWithGoogle();
+                      if (res) {
+                        setGoogleUser(res.user);
+                        setGoogleToken(res.accessToken);
+                        triggerToast('Successfully signed in with Google Workspace!', 'success');
+                      }
+                    } catch (err: any) {
                       console.error('Google Sign-in failed:', err);
-                      triggerToast('Google authorization failed or was dismissed.', 'warn');
+                      let errMsg = 'Google authorization failed or was dismissed.';
+                      
+                      // Highlight common iframe sandbox popup constraints
+                      if (err?.code === 'auth/popup-blocked') {
+                        errMsg = 'Google popup blocked! Please click "Open in New Tab" ↗ at the top right to complete authorization.';
+                      } else if (err?.code === 'auth/cancelled-popup-request' || err?.code === 'auth/popup-closed-by-user') {
+                        errMsg = 'Sign-in window was closed before completion.';
+                      } else if (err?.message) {
+                        errMsg = `Auth failed: ${err.message}`;
+                      }
+                      
+                      triggerToast(errMsg, 'warn');
                     }
                   }}
                   onSignOut={async () => {

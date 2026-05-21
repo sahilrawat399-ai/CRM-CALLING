@@ -153,6 +153,12 @@ export default function GoogleSheetsSync({
                     NO ACTIVE AUTHORIZATION: CRM will update records locally only until signed in.
                   </span>
                 </div>
+                <div className="text-[11px] text-slate-400 border border-slate-800 p-3 rounded-xl bg-slate-900/40 space-y-1.5 leading-relaxed">
+                  <span className="font-bold text-indigo-400 block tracking-tight">💡 Sandbox Frame Advisory:</span>
+                  <p className="m-0 text-[10.5px]">
+                    If the click doesn't open the Google Sign-In pop-up or displays a message that authorization failed/was dismissed, please click the <strong className="text-white hover:text-indigo-400">"Open in New Tab" ↗</strong> button on the top-right corner of this live preview interface to run the application in a standalone page.
+                  </p>
+                </div>
               </div>
             )}
           </div>
