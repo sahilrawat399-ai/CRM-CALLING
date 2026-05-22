@@ -5,14 +5,20 @@
 
 export type OrderStatus =
   | 'Pending'
+  | 'Picked'
+  | 'Not Picked'
+  | 'Busy'
+  | 'Switched Off'
+  | 'Invalid Number'
+  | 'Order Confirmed'
+  | 'Order Cancelled'
+  | 'Callback Later'
+  | 'Interested'
+  | 'Fake Order'
   | 'Confirmed'
   | 'Cancelled'
   | 'No Answer'
-  | 'Callback Later'
-  | 'Busy'
-  | 'Wrong Number'
-  | 'Interested'
-  | 'Fake Order';
+  | 'Wrong Number';
 
 export interface User {
   id: string;
@@ -39,6 +45,18 @@ export interface Order {
   callAttempts: number;
   lastCalledAt?: string;
   createdAt: string;
+
+  // New Excel sheet & retry tracking fields
+  orderDate?: string;
+  orderNumber?: string;
+  paymentMode?: string;
+  orderConfirmed?: string; // Yes/No/''
+  callStatus?: string; // Picked, Not Picked, Busy, Switched Off, Invalid Number, Order Confirmed, Order Cancelled
+  retry4Hr?: string; // Status of 1st retry (3-8 hrs)
+  retryDay2?: string; // Status of 2nd retry (1 day)
+  remarks?: string;
+  whatsappConfirmationSent?: 'Yes' | 'No' | 'Pending';
+  addressVerified?: 'Yes' | 'No' | 'Pending';
 }
 
 export interface CallLog {

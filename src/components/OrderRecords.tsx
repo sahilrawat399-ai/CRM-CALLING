@@ -32,6 +32,9 @@ export default function OrderRecords({
   onSelectOrderInDialer,
   onResetDatabase,
 }: OrderRecordsProps) {
+  // Dynamic workflow category sections
+  const [activeSection, setActiveSection] = useState<'all' | 'pending' | 'verification' | 'completed'>('all');
+
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -92,47 +95,88 @@ export default function OrderRecords({
     });
   }, [orders, searchTerm, statusFilter, productFilter, cityFilter, minAmount, maxAmount]);
 
+  // Filter based on active section layout
+  const sectionFilteredOrders = useMemo(() => {
+    return filteredOrders.filter((o) => {
+      if (activeSection === 'all') return true;
+      
+      const isCompleted = o.status === 'Order Confirmed' || o.status === 'Order Cancelled' || o.status === 'Confirmed' || o.status === 'Cancelled';
+      const isPending = o.callAttempts === 0 && o.status === 'Pending';
+      const isPendingVerification = !isCompleted && !isPending;
+
+      if (activeSection === 'pending') {
+        return isPending;
+      }
+      if (activeSection === 'verification') {
+        return isPendingVerification;
+      }
+      if (activeSection === 'completed') {
+        return isCompleted;
+      }
+      return true;
+    });
+  }, [filteredOrders, activeSection]);
+
   // Handle pagination division
   const paginatedOrders = useMemo(() => {
     const startIdx = (currentPage - 1) * rowsPerPage;
-    return filteredOrders.slice(startIdx, startIdx + rowsPerPage);
-  }, [filteredOrders, currentPage]);
+    return sectionFilteredOrders.slice(startIdx, startIdx + rowsPerPage);
+  }, [sectionFilteredOrders, currentPage]);
 
-  const totalPages = Math.ceil(filteredOrders.length / rowsPerPage) || 1;
+  const totalPages = Math.ceil(sectionFilteredOrders.length / rowsPerPage) || 1;
 
   // Export filtered orders list to CSV download natively in client browser
   const handleExportCSV = () => {
     const headers = [
-      'Order ID',
-      'Customer Name',
+      'Order Date',
+      'Order number',
+      'Custommer Name',
       'Phone Number',
+      'Full Address',
+      'Order amount',
+      'Payment Mode',
       'Product Name',
-      'COD Amount',
-      'Address',
-      'City',
-      'State',
-      'Pincode',
-      'Status',
-      'Attempts',
-      'Last Called At',
-      'Created At'
+      'Order Confirmed',
+      'Call Status',
+      '4 HR',
+      'Day 2',
+      'Remarks',
+      'Whatsapp Confirmation Sent',
+      'Address Verified'
     ];
 
-    const dataRows = filteredOrders.map((o) => [
-      o.id,
-      o.customerName,
-      o.phoneNumber,
-      o.productName,
-      o.codAmount,
-      o.address,
-      o.city || '',
-      o.state || '',
-      o.pincode || '',
-      o.status,
-      o.callAttempts,
-      o.lastCalledAt || '',
-      o.createdAt
-    ]);
+    const dataRows = filteredOrders.map((o) => {
+      // Calculate order confirmed display string
+      let isConfirmed = o.orderConfirmed || '';
+      if (!isConfirmed) {
+        if (o.status === 'Confirmed' || o.status === 'Order Confirmed') {
+          isConfirmed = 'Yes';
+        } else if (o.status === 'Cancelled' || o.status === 'Order Cancelled') {
+          isConfirmed = 'No';
+        }
+      }
+
+      // Format clean date
+      const displayDate = o.orderDate || new Date(o.createdAt).toLocaleDateString();
+
+      return [
+        displayDate,
+        o.orderNumber || o.id,
+        o.customerName,
+        o.phoneNumber,
+        o.address || `${o.city || ''} ${o.state || ''} ${o.pincode || ''}`.trim(),
+        o.codAmount,
+        o.paymentMode || 'COD',
+        o.productName,
+        isConfirmed,
+        o.callStatus || o.status,
+        o.retry4Hr || '',
+        o.retryDay2 || '',
+        o.remarks || o.notes || '',
+        o.whatsappConfirmationSent || 'No',
+        o.addressVerified || 'No'
+      ];
+    });
 
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
@@ -141,7 +185,7 @@ export default function OrderRecords({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `fashwox_crm_export_${Date.now()}.csv`);
+    link.setAttribute('download', `customer_order_calling_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -158,14 +202,19 @@ export default function OrderRecords({
   // Status Badge visual customiser
   const getStatusBadge = (status: OrderStatus) => {
     const mapStyles: Record<
-      OrderStatus,
+      string,
       { bg: string; text: string; dot: string }
     > = {
       Pending: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' },
       Confirmed: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' },
+      'Order Confirmed': { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' },
       Cancelled: { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-400', dot: 'bg-rose-500' },
+      'Order Cancelled': { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-400', dot: 'bg-rose-500' },
       'No Answer': { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-350', dot: 'bg-slate-400' },
+      'Not Picked': { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-350', dot: 'bg-slate-400' },
       Busy: { bg: 'bg-pink-50 dark:bg-pink-950/40', text: 'text-pink-700 dark:text-pink-400', dot: 'bg-pink-500' },
+      'Switched Off': { bg: 'bg-pink-50 dark:bg-pink-950/40', text: 'text-pink-700 dark:text-pink-400', dot: 'bg-pink-500' },
+      'Invalid Number': { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500' },
       'Wrong Number': { bg: 'bg-red-50 dark:bg-red-950/40', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500' },
       'Callback Later': { bg: 'bg-indigo-50 dark:bg-indigo-950/40', text: 'text-indigo-700 dark:text-indigo-400', dot: 'bg-indigo-500' },
       Interested: { bg: 'bg-violet-50 dark:bg-violet-950/40', text: 'text-violet-700 dark:text-violet-400', dot: 'bg-violet-500' },
@@ -184,7 +233,52 @@ export default function OrderRecords({
 
   return (
     <div className="space-y-6">
-           {/* Search Toolbar Controls block */}
+      
+      {/* Dynamic Workflow Category Tabs */}
+      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100/80 dark:bg-[#070a13] border border-slate-200/50 dark:border-slate-800 rounded-xl">
+        <button
+          onClick={() => { setActiveSection('all'); setCurrentPage(1); }}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer border-0 ${
+            activeSection === 'all'
+              ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-600 dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          🗂️ All Records ({filteredOrders.length})
+        </button>
+        <button
+          onClick={() => { setActiveSection('pending'); setCurrentPage(1); }}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer border-0 ${
+            activeSection === 'pending'
+              ? 'bg-white dark:bg-indigo-600 shadow-sm text-indigo-600 dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          📥 Pending Orders ({orders.filter((o) => o.callAttempts === 0 && o.status === 'Pending').length})
+        </button>
+        <button
+          onClick={() => { setActiveSection('verification'); setCurrentPage(1); }}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer border-0 ${
+            activeSection === 'verification'
+              ? 'bg-white dark:bg-amber-600 shadow-sm text-amber-600 dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          ⏱️ Pending Verification ({orders.filter((o) => o.callAttempts > 0 && o.status !== 'Order Confirmed' && o.status !== 'Order Cancelled' && o.status !== 'Confirmed' && o.status !== 'Cancelled').length})
+        </button>
+        <button
+          onClick={() => { setActiveSection('completed'); setCurrentPage(1); }}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all cursor-pointer border-0 ${
+            activeSection === 'completed'
+              ? 'bg-white dark:bg-emerald-600 shadow-sm text-emerald-600 dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+          }`}
+        >
+          ✅ Completed Orders ({orders.filter((o) => o.status === 'Order Confirmed' || o.status === 'Order Cancelled' || o.status === 'Confirmed' || o.status === 'Cancelled').length})
+        </button>
+      </div>
+
+      {/* Search Toolbar Controls block */}
       <div id="search-nav" className="bg-white dark:bg-[#0f172a]/45 border border-slate-200/60 dark:border-slate-800 p-5 rounded-xl shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
           
@@ -330,13 +424,13 @@ export default function OrderRecords({
       <div className="bg-white dark:bg-[#0f172a]/45 border border-slate-200/60 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div className="p-4 bg-slate-50/50 dark:bg-slate-850/20 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
           <span className="font-semibold text-slate-750 dark:text-slate-300">
-            Showing {filteredOrders.length} matching order records
+            Showing {sectionFilteredOrders.length} matching order records
           </span>
           <span className="text-slate-400">Page {currentPage} of {totalPages}</span>
         </div>
 
         <div className="overflow-x-auto">
-          {filteredOrders.length === 0 ? (
+          {sectionFilteredOrders.length === 0 ? (
             <div className="p-10 text-center space-y-2">
               <span className="text-3xl">🧩</span>
               <h5 className="text-sm font-semibold text-slate-800 dark:text-slate-200 m-0">No Matching Records</h5>

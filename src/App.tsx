@@ -24,7 +24,10 @@ import {
   Terminal,
   Activity,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import { Order, CallLog, RealtimeStats, OrderStatus, User as AppUser } from './types';
@@ -40,9 +43,10 @@ export default function App() {
 
   // Multi-user authentication states
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [loginMail, setLoginMail] = useState('');
-  const [loginRole, setLoginRole] = useState<'admin' | 'agent'>('agent');
-  const [loginName, setLoginName] = useState('');
+  const [loginUserId, setLoginUserId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [credentialError, setCredentialError] = useState('');
 
   // Primary data storage
   const [orders, setOrders] = useState<Order[]>([]);
@@ -191,6 +195,8 @@ export default function App() {
       remarks: string;
       summary?: string;
       duration: number;
+      whatsappConfirmationSent?: 'Yes' | 'No' | 'Pending';
+      addressVerified?: 'Yes' | 'No' | 'Pending';
     }
   ): Promise<boolean> => {
     try {
@@ -228,32 +234,61 @@ export default function App() {
     }
   };
 
-  // Helper login credentials options presets click trigger
-  const handlePresetLogin = (role: 'admin' | 'agent') => {
+  // Handler login credentials presets auto-fill
+  const handlePresetFill = (role: 'admin' | 'agent') => {
+    setCredentialError('');
     if (role === 'admin') {
-      setCurrentUser({
-        id: 'usr_admin',
-        name: 'Fashwox CRM Admin',
-        email: 'admin@fashwox.co',
-        role: 'admin',
-        status: 'online',
-        lastActive: new Date().toISOString(),
-      });
-      setRemarksSelection('Fashwox CRM Admin');
-      triggerToast('Administrator auth access confirmed!', 'success');
+      setLoginUserId('ADMIN');
+      setLoginPassword('Sahil@2003');
+      triggerToast('Pre-filled Manager credentials!', 'info');
     } else {
+      setLoginUserId('Agent108');
+      setLoginPassword('Agent@101');
+      triggerToast('Pre-filled Co-agent credentials!', 'info');
+    }
+  };
+
+  // Real credential validation Form Submitter
+  const handleFormLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCredentialError('');
+
+    const cleanUserId = loginUserId.trim();
+    const cleanPassword = loginPassword.trim();
+
+    if (!cleanUserId || !cleanPassword) {
+      setCredentialError('Please provide both User ID and Password.');
+      return;
+    }
+
+    if (cleanUserId === 'Agent108' && cleanPassword === 'Agent@101') {
       setCurrentUser({
-        id: 'usr_agent',
-        name: 'Alice Agent',
-        email: 'alice@fashwox.co',
+        id: 'usr_agent_108',
+        name: 'Agent 108',
+        email: 'agent108@fashwox.co',
         role: 'agent',
         status: 'online',
         lastActive: new Date().toISOString(),
       });
-      setRemarksSelection('Alice Agent');
-      triggerToast('Agent dashboard successfully authorized!', 'success');
+      setRemarksSelection('Agent 108');
+      triggerToast('Welcomed Agent 108! Calling workstation authorized.', 'success');
+      setActiveTab('dashboard');
+    } else if (cleanUserId === 'ADMIN' && cleanPassword === 'Sahil@2003') {
+      setCurrentUser({
+        id: 'usr_admin',
+        name: 'Sahil (Manager)',
+        email: 'sahilrawat399@gmail.com',
+        role: 'admin',
+        status: 'online',
+        lastActive: new Date().toISOString(),
+      });
+      setRemarksSelection('Sahil (Manager)');
+      triggerToast('Manager dashboard authorized successfully! Backed by ADMIN node.', 'success');
+      setActiveTab('dashboard');
+    } else {
+      setCredentialError('Invalid ID or Password. Verify details and try again.');
+      triggerToast('Authentication failed', 'warn');
     }
-    setActiveTab('dashboard');
   };
 
   // Custom session agent name references select helper
@@ -320,70 +355,145 @@ export default function App() {
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-lg bg-white/80 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-slate-250/60 dark:border-slate-800 p-8 rounded-2xl shadow-xl space-y-6 relative z-10 text-center"
+            className="w-full max-w-md bg-white/80 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-slate-200 dark:border-slate-800 p-8 rounded-2xl shadow-xl space-y-6 relative z-10"
           >
             
             {/* Header logo custom visual panel */}
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-550/10 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-600 dark:text-indigo-400 font-bold tracking-wider text-[10px]">
+            <div className="space-y-2 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-600 dark:text-indigo-400 font-bold tracking-wider text-[10px]">
                 <Sparkles size={11} />
-                ADMIN & AGENT WORKSTATION
+                SECURE WORKSTATION LOGIN
               </div>
               <h2 className="text-3xl font-black tracking-tight text-slate-850 dark:text-white m-0">
                 Fashwox CRM
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                Streamline Cash-On-Delivery confirmation calls, track order statuses in real-time, and log outcomes with AI assistance.
+                Log in as an authorized Agent or Manager to coordinate list calling, track real-time statistics, and record COD outcomes.
               </p>
             </div>
 
+            {/* Credential login Form */}
+            <form onSubmit={handleFormLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5" htmlFor="login-id-input">
+                  User ID / Email
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <User size={15} />
+                  </span>
+                  <input
+                    id="login-id-input"
+                    type="text"
+                    required
+                    value={loginUserId}
+                    onChange={(e) => {
+                      setLoginUserId(e.target.value);
+                      if (credentialError) setCredentialError('');
+                    }}
+                    placeholder="Enter your User ID"
+                    className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl text-slate-900 dark:text-white font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5" htmlFor="login-password-input">
+                  Password
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock size={15} />
+                  </span>
+                  <input
+                    id="login-password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={loginPassword}
+                    onChange={(e) => {
+                      setLoginPassword(e.target.value);
+                      if (credentialError) setCredentialError('');
+                    }}
+                    placeholder="••••••••"
+                    className="w-full text-xs pl-9 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-xl text-slate-900 dark:text-white font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-500 cursor-pointer border-0 bg-transparent"
+                    title={showPassword ? "Hide Password" : "Show Password"}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {credentialError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 text-rose-650 dark:text-rose-400 rounded-xl text-[11px] font-semibold text-center flex items-center justify-center gap-1.5">
+                  <XCircle size={14} className="shrink-0" />
+                  <span>{credentialError}</span>
+                </div>
+              )}
+
+              <button
+                id="login-submit-btn"
+                type="submit"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl hover:shadow-lg transition-all cursor-pointer border-0 flex items-center justify-center gap-2"
+              >
+                <span>Authorize & Enter Dashboard</span>
+                <ChevronRight size={14} />
+              </button>
+            </form>
+
             {/* Simulated preset quick auth triggers */}
             <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                Select your calling profile to log in
+              <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider text-center">
+                Quick-Fill Authorized Presets
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Agent Access Choice Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Agent Access Preset */}
                 <button
-                  onClick={() => handlePresetLogin('agent')}
-                  className="p-4 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 text-left cursor-pointer transition-all flex flex-col justify-between h-36 relative overflow-hidden group shadow-sm"
+                  type="button"
+                  onClick={() => handlePresetFill('agent')}
+                  className="p-3 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 text-left cursor-pointer transition-all flex flex-col justify-between h-28 relative overflow-hidden group shadow-sm"
                 >
                   <div className="space-y-1">
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
-                      <User size={14} className="text-indigo-500" />
+                      <User size={13} className="text-indigo-500" />
                       CO-Agent Access
                     </h4>
-                    <p className="text-[10px] text-slate-405 leading-normal m-0 pr-4">
-                      Dial pending client lists, WhatsApp templates, and log remarks.
+                    <p className="text-[9.5px] text-slate-500 dark:text-slate-400 mt-1 mb-0 leading-normal">
+                      ID: <span className="font-semibold font-mono text-indigo-600 dark:text-indigo-400">Agent108</span><br />
+                      Pass: <span className="font-semibold font-mono text-indigo-600 dark:text-indigo-400">Agent@101</span>
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 font-mono flex items-center gap-1 mt-4">
-                    Authorized Preset
+                  <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5 mt-2">
+                    Click to Pre-fill
                     <ChevronRight size={10} className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                   </span>
-                  <div className="absolute -right-5 -bottom-5 w-16 h-16 bg-indigo-500/5 group-hover:bg-indigo-500/10 rounded-full transition-colors"></div>
                 </button>
 
-                {/* Manager/Admin Access Choice Card */}
+                {/* Manager Access Preset */}
                 <button
-                  onClick={() => handlePresetLogin('admin')}
-                  className="p-4 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-left cursor-pointer transition-all flex flex-col justify-between h-36 relative overflow-hidden group shadow-sm"
+                  type="button"
+                  onClick={() => handlePresetFill('admin')}
+                  className="p-3 rounded-xl bg-slate-50/60 hover:bg-slate-100/50 dark:bg-slate-900/60 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-left cursor-pointer transition-all flex flex-col justify-between h-28 relative overflow-hidden group shadow-sm"
                 >
                   <div className="space-y-1">
                     <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
-                      <ShieldCheck size={14} className="text-emerald-500" />
+                      <ShieldCheck size={13} className="text-emerald-500" />
                       Manager Access
                     </h4>
-                    <p className="text-[10px] text-slate-405 leading-normal m-0 pr-4">
-                      Import CSV sheets, export reports, and inspect metrics tables.
+                    <p className="text-[9.5px] text-slate-500 dark:text-slate-400 mt-1 mb-0 leading-normal">
+                      ID: <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-450">ADMIN</span><br />
+                      Pass: <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-450">Sahil@2003</span>
                     </p>
                   </div>
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-450 font-mono flex items-center gap-1 mt-4">
-                    Authorized Preset
+                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-450 flex items-center gap-0.5 mt-2">
+                    Click to Pre-fill
                     <ChevronRight size={10} className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                   </span>
-                  <div className="absolute -right-5 -bottom-5 w-16 h-16 bg-emerald-500/5 group-hover:bg-emerald-500/10 rounded-full transition-colors"></div>
                 </button>
               </div>
             </div>
@@ -392,7 +502,7 @@ export default function App() {
             <div className="flex gap-2 p-3.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-150 dark:border-slate-800 text-left">
               <Terminal className="text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" size={14} />
               <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed m-0">
-                <strong>Local sandbox warning:</strong> All call logs and database changes persist within your terminal. Make sure to download exported CSV reports before restarting container hosts to preserve outcomes.
+                <strong>Secured node:</strong> Inputs are verified instantaneously inside this sandbox layer. Make sure to download and backup exported reports regularly.
               </p>
             </div>
 

@@ -289,14 +289,17 @@ if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_
 // Compute Statistics Helper
 function computeStats(orders: Order[]): RealtimeStats {
   const totalOrders = orders.length;
+  
+  // Pending calls are any orders that are still waitlisted or not fully completed
   const pendingCalls = orders.filter((o) => o.status === 'Pending').length;
-  const confirmedOrders = orders.filter((o) => o.status === 'Confirmed').length;
-  const cancelledOrders = orders.filter((o) => o.status === 'Cancelled').length;
-  const noAnswerOrders = orders.filter((o) => o.status === 'No Answer').length;
+  
+  const confirmedOrders = orders.filter((o) => o.status === 'Confirmed' || o.status === 'Order Confirmed').length;
+  const cancelledOrders = orders.filter((o) => o.status === 'Cancelled' || o.status === 'Order Cancelled').length;
+  const noAnswerOrders = orders.filter((o) => ['No Answer', 'Not Picked', 'Switched Off', 'Invalid Number'].includes(o.status)).length;
   const callbackOrders = orders.filter((o) => o.status === 'Callback Later').length;
   
   const totalRevenue = orders
-    .filter((o) => o.status === 'Confirmed')
+    .filter((o) => o.status === 'Confirmed' || o.status === 'Order Confirmed')
     .reduce((acc, o) => acc + (o.codAmount || 0), 0);
 
   const closedCalls = orders.filter((o) => o.status !== 'Pending').length;
@@ -392,8 +395,10 @@ app.post('/api/orders/upload', (req, res) => {
     if (isDuplicate) {
       duplicatesCount++;
     } else {
+      const customId = o.orderNumber ? String(o.orderNumber).trim() : `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const orderDateVal = o.orderDate ? String(o.orderDate).trim() : new Date().toISOString();
       const newOrder: Order = {
-        id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        id: customId,
         customerName: String(o.customerName).trim(),
         phoneNumber: cleanedPhone,
         productName: String(o.productName || 'E-commerce Product').trim(),
@@ -404,8 +409,20 @@ app.post('/api/orders/upload', (req, res) => {
         pincode: String(o.pincode || '').trim(),
         status: (o.status as OrderStatus) || 'Pending',
         notes: String(o.notes || '').trim(),
-        callAttempts: 0,
-        createdAt: new Date().toISOString(),
+        callAttempts: Number(o.callAttempts) || 0,
+        createdAt: orderDateVal,
+        
+        // Save raw properties from Excel mapping
+        orderDate: orderDateVal,
+        orderNumber: customId,
+        paymentMode: String(o.paymentMode || 'COD').trim(),
+        orderConfirmed: String(o.orderConfirmed || '').trim(),
+        callStatus: String(o.callStatus || '').trim(),
+        retry4Hr: String(o.retry4Hr || '').trim(),
+        retryDay2: String(o.retryDay2 || '').trim(),
+        remarks: String(o.remarks || '').trim(),
+        whatsappConfirmationSent: (o.whatsappConfirmationSent === 'Yes' || o.whatsappConfirmationSent === 'No' || o.whatsappConfirmationSent === 'Pending') ? o.whatsappConfirmationSent : 'No',
+        addressVerified: (o.addressVerified === 'Yes' || o.addressVerified === 'No' || o.addressVerified === 'Pending') ? o.addressVerified : 'No'
       };
       db.orders.unshift(newOrder);
       addedCount++;
@@ -467,8 +484,64 @@ app.post('/api/orders/:id/call-log', (req, res) => {
   };
   db.statusHistory.unshift(changesLogged);
 
-  // Update original order record
-  order.status = status as OrderStatus;
+  // Update custom fields requested by Excel CRM retry mechanism
+  const currentAttempts = order.callAttempts;
+  order.callStatus = status;
+  order.remarks = remarks || summary || '';
+
+  // Apply sequential retry tracking
+  if (currentAttempts === 0) {
+    // Initial call attempt
+    order.callStatus = status;
+    if (status === 'Order Confirmed') {
+      order.status = 'Order Confirmed';
+      order.orderConfirmed = 'Yes';
+    } else if (status === 'Order Cancelled') {
+      order.status = 'Order Cancelled';
+      order.orderConfirmed = 'No';
+    } else {
+      order.status = status as OrderStatus; // Pending retry Verification
+      order.orderConfirmed = 'No';
+    }
+  } else if (currentAttempts === 1) {
+    // 1st retry call block (3-8 HR)
+    order.retry4Hr = status;
+    order.callStatus = status;
+    if (status === 'Order Confirmed') {
+      order.status = 'Order Confirmed';
+      order.orderConfirmed = 'Yes';
+    } else if (status === 'Order Cancelled') {
+      order.status = 'Order Cancelled';
+      order.orderConfirmed = 'No';
+    } else {
+      order.status = status as OrderStatus;
+      order.orderConfirmed = 'No';
+    }
+  } else {
+    // 2nd retry call block (Day 2)
+    order.retryDay2 = status;
+    order.callStatus = status;
+    if (status === 'Order Confirmed') {
+      order.status = 'Order Confirmed';
+      order.orderConfirmed = 'Yes';
+    } else if (status === 'Order Cancelled') {
+      order.status = 'Order Cancelled';
+      order.orderConfirmed = 'No';
+    } else {
+      order.status = status as OrderStatus;
+      order.orderConfirmed = 'No';
+    }
+  }
+
+  // Update auxiliary fields if supplied
+  if (req.body.whatsappConfirmationSent) {
+    order.whatsappConfirmationSent = req.body.whatsappConfirmationSent;
+  }
+  if (req.body.addressVerified) {
+    order.addressVerified = req.body.addressVerified;
+  }
+
+  // Increment total attempts counter and timestamp last activity
   order.callAttempts += 1;
   order.lastCalledAt = new Date().toISOString();
 

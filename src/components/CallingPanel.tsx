@@ -38,6 +38,8 @@ interface CallingPanelProps {
       remarks: string;
       summary?: string;
       duration: number;
+      whatsappConfirmationSent?: 'Yes' | 'No' | 'Pending';
+      addressVerified?: 'Yes' | 'No' | 'Pending';
     }
   ) => Promise<boolean>;
   activeOrderIndex: number;
@@ -58,7 +60,11 @@ export default function CallingPanel({
 
   const activeQueue = React.useMemo(() => {
     if (filterPendingOnly) {
-      return orders.filter((o) => o.status === 'Pending' || o.status === 'Callback Later' || o.status === 'No Answer');
+      return orders.filter((o) => 
+        o.status === 'Pending' || 
+        o.status === 'Callback Later' || 
+        ['No Answer', 'Not Picked', 'Busy', 'Switched Off', 'Invalid Number', 'Wrong Number'].includes(o.status)
+      );
     }
     return orders;
   }, [orders, filterPendingOnly]);
@@ -69,18 +75,30 @@ export default function CallingPanel({
   const [isCalling, setIsCalling] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [showRemarksPopup, setShowRemarksPopup] = useState(false);
-  const [chosenStatus, setChosenStatus] = useState<OrderStatus>('Confirmed');
+  const [chosenStatus, setChosenStatus] = useState<OrderStatus>('Order Confirmed');
 
   // Dialogue Transcription Stream State
   const [transcriptLines, setTranscriptLines] = useState<{ sender: 'agent' | 'customer'; text: string }[]>([]);
 
   // Remarks Form Values
   const [remarksText, setRemarksText] = useState('');
-  const [remarksStatus, setRemarksStatus] = useState<OrderStatus>('Confirmed');
+  const [remarksStatus, setRemarksStatus] = useState<OrderStatus>('Order Confirmed');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSpeechTranslating, setIsSpeechTranslating] = useState(false);
   const [aiSummarySuggestion, setAiSummarySuggestion] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+
+  // New toggle tracking states
+  const [whatsappSent, setWhatsappSent] = useState<'Yes' | 'No'>('No');
+  const [addressCheck, setAddressCheck] = useState<'Yes' | 'No'>('No');
+
+  // Initialize toggles from active order
+  useEffect(() => {
+    if (activeOrder) {
+      setWhatsappSent(activeOrder.whatsappConfirmationSent === 'Yes' ? 'Yes' : 'No');
+      setAddressCheck(activeOrder.addressVerified === 'Yes' ? 'Yes' : 'No');
+    }
+  }, [showRemarksPopup, activeOrder]);
 
   // Quick Remark Templates helper
   const remarkTemplates = [
@@ -168,7 +186,7 @@ export default function CallingPanel({
     return `${min.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const startDialing = (statusObjective: OrderStatus = 'Confirmed') => {
+  const startDialing = (statusObjective: OrderStatus = 'Order Confirmed') => {
     if (!activeOrder) return;
     setChosenStatus(statusObjective);
     setRemarksStatus(statusObjective);
@@ -185,12 +203,12 @@ export default function CallingPanel({
 
     // Formulate a quick helpful remark to populate initially
     let defaultRemarks = '';
-    if (suggestedStatus === 'Confirmed') {
+    if (suggestedStatus === 'Order Confirmed' || suggestedStatus === 'Confirmed') {
       defaultRemarks = 'Customer confirmed order is valid. Verified size details and is ready to accept delivery parcel.';
-    } else if (suggestedStatus === 'Cancelled') {
+    } else if (suggestedStatus === 'Order Cancelled' || suggestedStatus === 'Cancelled') {
       defaultRemarks = 'Refused confirmation. Wants to replace with another item option due to size mismatch.';
-    } else if (suggestedStatus === 'No Answer' || suggestedStatus === 'Busy') {
-      defaultRemarks = 'Ringing tone active. Couldn\'t reach client. Rescheduled callbacks.';
+    } else if (['No Answer', 'Not Picked', 'Busy', 'Switched Off', 'Invalid Number'].includes(suggestedStatus)) {
+      defaultRemarks = `Calling attempt failed with outcome: ${suggestedStatus}. Recorded details for retry logic schedule.`;
     } else {
       defaultRemarks = `Call logged with status outcome: ${suggestedStatus}.`;
     }
@@ -286,6 +304,8 @@ export default function CallingPanel({
       remarks: remarksText,
       summary: aiSummarySuggestion, // Save AI professional summary field
       duration: callDuration || Math.floor(Math.random() * 30) + 15,
+      whatsappConfirmationSent: whatsappSent,
+      addressVerified: addressCheck
     });
 
     if (success) {
@@ -377,9 +397,9 @@ export default function CallingPanel({
                       {ord.customerName}
                     </span>
                     <span className={`text-[9.5px] font-mono px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
-                      ord.status === 'Confirmed'
+                      ord.status === 'Confirmed' || ord.status === 'Order Confirmed'
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
-                        : ord.status === 'Cancelled'
+                        : ord.status === 'Cancelled' || ord.status === 'Order Cancelled'
                         ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400'
                         : 'bg-amber-105 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
                     }`}>
@@ -478,13 +498,13 @@ export default function CallingPanel({
                     </div>
                     <div className="flex gap-1.5">
                       <button
-                        onClick={() => stopDialing('Confirmed')}
+                        onClick={() => stopDialing('Order Confirmed')}
                         className="px-3.5 py-2 text-[10.5px] font-bold text-white bg-emerald-650 hover:bg-emerald-700 rounded-lg cursor-pointer border-0"
                       >
                         Answered (Success)
                       </button>
                       <button
-                        onClick={() => stopDialing('No Answer')}
+                        onClick={() => stopDialing('Not Picked')}
                         className="px-3.5 py-2 text-[10.5px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer border-0"
                       >
                         No Answer
@@ -622,7 +642,7 @@ export default function CallingPanel({
               {!isCalling && (
                 <div className="flex flex-wrap gap-2.5 pt-4 border-t border-slate-100 dark:border-slate-850">
                   <button
-                    onClick={() => startDialing('Confirmed')}
+                    onClick={() => startDialing('Order Confirmed')}
                     id="btn-trigger-dialing"
                     className="flex-1 py-3 px-4 font-bold bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
                   >
@@ -632,19 +652,19 @@ export default function CallingPanel({
 
                   <div className="flex gap-1.5 w-full sm:w-auto">
                     <button
-                      onClick={() => stopDialing('Confirmed')}
+                      onClick={() => stopDialing('Order Confirmed')}
                       className="flex-1 sm:flex-none px-4 py-3 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-colors cursor-pointer border-0"
                     >
                       Quick Confirm
                     </button>
                     <button
-                      onClick={() => stopDialing('Cancelled')}
+                      onClick={() => stopDialing('Order Cancelled')}
                       className="flex-1 sm:flex-none px-4 py-3 text-xs font-bold text-white bg-rose-650 hover:bg-rose-500 rounded-xl transition-colors cursor-pointer border-0"
                     >
                       Quick Cancel
                     </button>
                     <button
-                      onClick={() => stopDialing('No Answer')}
+                      onClick={() => stopDialing('Not Picked')}
                       className="flex-1 sm:flex-none px-4 py-3 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-750 rounded-xl transition-colors cursor-pointer border-0"
                     >
                       No Answer
@@ -711,9 +731,7 @@ export default function CallingPanel({
                       {activeOrder.productName}
                     </span>
                   </div>
-                </div>
-
-                {/* Outcome Selector field */}
+                           {/* Outcome Selector field */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     E-Commerce Dispatch Status outcome
@@ -727,16 +745,49 @@ export default function CallingPanel({
                     }}
                     className="w-full text-xs font-semibold bg-slate-50 hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-750 text-slate-800 dark:text-white rounded-xl p-2.5 outline-none transition-colors cursor-pointer"
                   >
-                    <option value="Confirmed">Confirmed (Prepare Dispatch)</option>
-                    <option value="Cancelled">Cancelled (Cancel SKU)</option>
-                    <option value="No Answer">No Answer / Voicemail</option>
-                    <option value="Busy">Busy / Call Reject</option>
-                    <option value="Wrong Number">Wrong / Inactive Mobile Contact</option>
+                    <option value="Order Confirmed">Order Confirmed (Picked & Verified)</option>
+                    <option value="Order Cancelled">Order Cancelled (Customer Asked)</option>
+                    <option value="Picked">Picked (Call Connected but Pending Details)</option>
+                    <option value="Not Picked">Not Picked (Ringing tone active)</option>
+                    <option value="Busy">Busy / Rejected</option>
+                    <option value="Switched Off">Switched Off / Out of network</option>
+                    <option value="Invalid Number">Wrong Number / Inactive Contact</option>
                     <option value="Callback Later">Callback Scheduled Later</option>
-                    <option value="Interested">Interested (Double check SKU variant)</option>
-                    <option value="Fake Order">Fake Order (Unintentional entry logs)</option>
+                    <option value="Interested">Interested (Hold for SKU review)</option>
+                    <option value="Fake Order">Fake Order (Unintentional entry log)</option>
                   </select>
                 </div>
+
+                {/* WhatsApp & Address Verification toggles */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      WhatsApp Confirmation
+                    </label>
+                    <select
+                      value={whatsappSent}
+                      onChange={(e) => setWhatsappSent(e.target.value as 'Yes' | 'No')}
+                      className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 text-slate-800 dark:text-white rounded-xl p-2 cursor-pointer"
+                    >
+                      <option value="No">No (Pending Alert)</option>
+                      <option value="Yes">Yes (Confirmation Sent)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Address Verified
+                    </label>
+                    <select
+                      value={addressCheck}
+                      onChange={(e) => setAddressCheck(e.target.value as 'Yes' | 'No')}
+                      className="w-full text-xs font-semibold bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 text-slate-800 dark:text-white rounded-xl p-2 cursor-pointer"
+                    >
+                      <option value="No">No (Not Confirmed)</option>
+                      <option value="Yes">Yes (Pin & Address OK)</option>
+                    </select>
+                  </div>
+                </div>        </div>
 
                 {/* Remarks comment field with Speech generator widget support */}
                 <div className="space-y-1.5">

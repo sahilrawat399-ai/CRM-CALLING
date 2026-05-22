@@ -59,17 +59,72 @@ export default function UploadSection({ onUploadSuccess, isLoading }: UploadSect
       return match ? rawRow[match] : undefined;
     };
 
+    const customerName = findValue(['customername', 'name', 'client', 'username', 'custommername']) || '';
+    const phoneNumber = String(findValue(['phonenumber', 'phone', 'mobile', 'contact', 'telephone']) || '').trim();
+    const productName = findValue(['productname', 'product', 'item', 'sku']) || 'Fashwox Item';
+    const codAmount = parseFloat(String(findValue(['codamount', 'amount', 'price', 'cod', 'orderamount'])) || '0') || 0;
+    const address = findValue(['address', 'addressline', 'street', 'location', 'fulladdress']) || '';
+    const city = findValue(['city', 'town']) || '';
+    const state = findValue(['state', 'region']) || '';
+    const pincode = String(findValue(['pincode', 'pin', 'zip', 'postal']) || '').trim();
+    const notes = findValue(['notes', 'note', 'remark', 'customernote', 'comment']) || '';
+
+    // Advanced Excel Sheet original properties
+    const orderDate = findValue(['orderdate', 'date']) ? String(findValue(['orderdate', 'date'])) : undefined;
+    const orderNumber = findValue(['ordernumber', 'number', 'orderid']) ? String(findValue(['ordernumber', 'number', 'orderid'])) : undefined;
+    const paymentMode = findValue(['paymentmode', 'payment']) ? String(findValue(['paymentmode', 'payment'])) : 'COD';
+    const orderConfirmed = findValue(['orderconfirmed', 'confirmed']) ? String(findValue(['orderconfirmed', 'confirmed'])) : '';
+    const callStatus = findValue(['callstatus', 'status']) ? String(findValue(['callstatus', 'status'])) : '';
+    const retry4Hr = findValue(['4hr', 'fourhour', 'firstretry']) ? String(findValue(['4hr', 'fourhour', 'firstretry'])) : '';
+    const retryDay2 = findValue(['day2', 'secondretry']) ? String(findValue(['day2', 'secondretry'])) : '';
+    const remarks = findValue(['remarks', 'remarks']) ? String(findValue(['remarks', 'remarks'])) : '';
+
+    // Whatsapp + Address checks
+    let whatsappConfirmationSent = findValue(['whatsappconfirmationsent', 'whatsapp', 'wa']) ? String(findValue(['whatsappconfirmationsent', 'whatsapp', 'wa'])) : 'No';
+    if (whatsappConfirmationSent.toLowerCase() === 'yes' || whatsappConfirmationSent.toLowerCase() === 'true') {
+      whatsappConfirmationSent = 'Yes';
+    } else {
+      whatsappConfirmationSent = 'No';
+    }
+
+    let addressVerified = findValue(['addressverified', 'verified']) ? String(findValue(['addressverified', 'verified'])) : 'No';
+    if (addressVerified.toLowerCase() === 'yes' || addressVerified.toLowerCase() === 'true') {
+      addressVerified = 'Yes';
+    } else {
+      addressVerified = 'No';
+    }
+
+    // Standardize status
+    let currentStatus = 'Pending';
+    if (callStatus.toLowerCase() === 'order confirmed' || orderConfirmed.toLowerCase() === 'yes' || callStatus.toLowerCase() === 'confirmed') {
+      currentStatus = 'Order Confirmed';
+    } else if (callStatus.toLowerCase() === 'order cancelled' || orderConfirmed.toLowerCase() === 'no' || callStatus.toLowerCase() === 'cancelled') {
+      currentStatus = 'Order Cancelled';
+    } else if (callStatus) {
+      currentStatus = callStatus; // e.g. Not Picked, Switched Off, etc.
+    }
+
     return {
-      customerName: findValue(['customername', 'name', 'client', 'username']) || '',
-      phoneNumber: String(findValue(['phonenumber', 'phone', 'mobile', 'contact']) || '').trim(),
-      productName: findValue(['productname', 'product', 'item', 'sku']) || 'Fashwox E-comm Item',
-      codAmount: parseFloat(String(findValue(['codamount', 'amount', 'price', 'cod'])) || '0') || 0,
-      address: findValue(['address', 'addressline', 'street', 'location']) || '',
-      city: findValue(['city', 'town']) || '',
-      state: findValue(['state', 'region']) || '',
-      pincode: String(findValue(['pincode', 'pin', 'zip', 'postal']) || '').trim(),
-      notes: findValue(['notes', 'note', 'remark', 'customernote', 'comment']) || '',
-      status: 'Pending'
+      customerName,
+      phoneNumber,
+      productName,
+      codAmount,
+      address,
+      city,
+      state,
+      pincode,
+      notes,
+      orderDate,
+      orderNumber,
+      paymentMode,
+      orderConfirmed,
+      callStatus,
+      retry4Hr,
+      retryDay2,
+      remarks,
+      whatsappConfirmationSent,
+      addressVerified,
+      status: currentStatus
     };
   };
 
